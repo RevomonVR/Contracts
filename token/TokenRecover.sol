@@ -16,4 +16,3 @@ contract TokenRecover is Ownable {
         IERC20(tokenAddress).transfer(owner(), tokenAmount);
     }
 }
-© 2021 GitHub, Inc.
