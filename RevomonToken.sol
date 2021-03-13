@@ -242,7 +242,7 @@ contract Pausable is Ownable {
     return true;
   }
   
-  function burnPauseRight() public onlyOwner whenNotPaused returns(bool){
+  function burnPauseRight() public onlyOwner returns(bool){
       pauseRightBurned = true;
   }
 
