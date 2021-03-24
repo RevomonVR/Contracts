@@ -192,77 +192,6 @@ contract Ownable is Context {
     }
 }
 
-
-contract Pausable is Ownable {
-  event Pause();
-  event Unpause();
-  address private publicSaleContractAddress;
-  address private preSaleContractAddress;
-
-  bool public paused = false;
-  bool public pauseRightBurned = false;
-
-  constructor() public {}
-
-  /**
-   * @dev modifier to allow actions only when the contract IS paused
-   */
-  modifier whenNotPaused() {
-    require(!paused || msg.sender == owner() || msg.sender == publicSaleContractAddress || msg.sender == preSaleContractAddress);
-    _;
-  }
-
-  /**
-   * @dev modifier to allow actions only when the contract IS NOT paused
-   */
-  modifier whenPaused {
-    require(paused);
-    _;
-  }
-
-  /**
-   * @dev called by the owner to pause, triggers stopped state
-   */
-  function pause() public onlyOwner whenNotPaused returns (bool) {
-    if(!pauseRightBurned){
-        paused = true;
-        emit Pause();
-        return true;
-    }
-    
-    return false;
-  }
-
-  /**
-   * @dev called by the owner to unpause, returns to normal state
-   */
-  function unpause() public onlyOwner whenPaused returns (bool) {
-    paused = false;
-    emit Unpause();
-    return true;
-  }
-  
-  function burnPauseRight() public onlyOwner returns(bool){
-      pauseRightBurned = true;
-  }
-
-  function getPublicSaleContractAddress() public view returns (address) {
-      return publicSaleContractAddress;
-  }
-
-  function setPublicSaleContractAddress(address _publicSaleAddress) public onlyOwner {
-      publicSaleContractAddress = _publicSaleAddress;
-  }
-
-  function getPreSaleContractAddress() public view returns (address) {
-      return preSaleContractAddress;
-  }
-
-  function setPresaleContractAddress(address _preSaleContractAddress) public onlyOwner {
-      preSaleContractAddress = _preSaleContractAddress;
-  }
-}
-
 library Address {
     function isContract(address account) internal view returns (bool) {
         bytes32 codehash;
@@ -1006,7 +935,7 @@ abstract contract ERC20Capped is ERC20 {
  * @title RevomonToken
  * @author RevomonToken (https://github.com/RevomonVR/Contracts)
  */
-contract RevomonToken is ERC20Capped, ERC20Burnable, ERC1363, Roles, TokenRecover, Pausable {
+contract RevomonToken is ERC20Capped, ERC20Burnable, ERC1363, Roles, TokenRecover {
 
     constructor(
         string memory name,
@@ -1031,7 +960,7 @@ contract RevomonToken is ERC20Capped, ERC20Burnable, ERC1363, Roles, TokenRecove
      * @param value The amount to be transferred
      * @return A boolean that indicates if the operation was successful.
      */
-    function transfer(address to, uint256 value) public virtual override(ERC20) whenNotPaused returns (bool) {
+    function transfer(address to, uint256 value) public virtual override(ERC20) returns (bool) {
         return super.transfer(to, value);
     }
 
@@ -1042,7 +971,7 @@ contract RevomonToken is ERC20Capped, ERC20Burnable, ERC1363, Roles, TokenRecove
      * @param value the amount of tokens to be transferred
      * @return A boolean that indicates if the operation was successful.
      */
-    function transferFrom(address from, address to, uint256 value) public virtual override(ERC20) whenNotPaused returns (bool) {
+    function transferFrom(address from, address to, uint256 value) public virtual override(ERC20) returns (bool) {
         return super.transferFrom(from, to, value);
     }
 
