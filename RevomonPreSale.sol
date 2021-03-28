@@ -334,11 +334,13 @@ contract RevoPreSaleContract is Ownable {
     uint256 public contributors;
     bool public isListingDone;
     
-    // Price calculed with ETH pegged at 1800 USDT.
-    uint256 public constant BASE_PRICE_IN_WEI = 61111111111111;
+    // 0.11 USDT
+    uint256 public constant BASE_PRICE_6_DECIMAL = 110000;
     
     bool public isWhitelistEnabled = true;
-    uint256 public minWeiPurchasable = 500000000000000000;
+    
+    /// minimum = 900 USDT
+    uint256 public minWeiPurchasable = 900000000;
     mapping (bytes=>bool) public whitelistedAddresses;
     mapping (bytes=>uint256) public whitelistedAddressesCap;
     mapping (address=>bool) public salesDonePerUser;
@@ -346,6 +348,8 @@ contract RevoPreSaleContract is Ownable {
     IRevoTokenContract private usdtToken;
     uint256 public tokenCap;
     bool public started = true;
+    
+    event BuyTokenEvent(uint _tokenPurchased);
   
    /**
     * @dev Error messages for require statements
@@ -381,39 +385,44 @@ contract RevoPreSaleContract is Ownable {
     * @dev constructor to mint initial tokens
     * Shall update to _mint once openzepplin updates their npm package.
     */
-    constructor(address dotxTokenAddress, address usdtAddress) public {
-        token = IRevoTokenContract(dotxTokenAddress);
+    constructor(address revoTokenAddress, address usdtAddress, uint256 maxCap) public {
+        token = IRevoTokenContract(revoTokenAddress);
         usdtToken = IRevoTokenContract(usdtAddress);
+        tokenCap = maxCap;
     }
+    
     /**
    * Low level token purchase function
    */
-    function buyTokens(uint256 amountUSDTInWei) public payable validPurchase{
+    function buyTokens(uint256 amountUSDT_6_decimal) public payable validPurchase(amountUSDT_6_decimal) {
         salesDonePerUser[msg.sender] = true;
-        
-        uint256 tokenCount = amountUSDTInWei/BASE_PRICE_IN_WEI;
 
+        uint256 tokenCount = amountUSDT_6_decimal.div(BASE_PRICE_6_DECIMAL);
+        uint amountUSDTInWei = amountUSDT_6_decimal.mul(10**12);
         tokenPurchased = tokenPurchased.add(tokenCount);
+        
+        require(tokenPurchased <= tokenCap, "Not enough token for sale.");
     
         contributors = contributors.add(1);
-    
-        forwardFunds(amountUSDTInWei);
         
-        //Lock 
+        forwardFunds(amountUSDT_6_decimal);
+        
         uint lockAmountStage = calculatePercentage(amountUSDTInWei, 20, 1000000);
         lock("lock_1", lockAmountStage, 0); //First unlock at listing
         lock("lock_2", lockAmountStage, 2419200); //Second unlock 28 days after the pre-sale - 28 * 86400 = 2419200
         lock("lock_3", lockAmountStage, 3628800); //Third unlock 42 days after the pre-sale - 42 * 86400 = 3628800
         lock("lock_4", lockAmountStage, 4838400); //Fourht unlock 56 days after the pre-sale - 56 * 86400 = 4838400
         lock("lock_5", lockAmountStage, 6048000); //Fifth unlock 70 days after the pre-sale - 70 * 86400 = 6048000
+        
+        emit BuyTokenEvent(tokenPurchased);
     }
     
-    modifier validPurchase() {
-        require(started);
-        require(!isWhitelistEnabled || whitelistedAddresses[getSlicedAddress(msg.sender)] == true);
-        require(msg.value >= minWeiPurchasable);
-        require(msg.value <= (whitelistedAddressesCap[getSlicedAddress(msg.sender)]).mul(10**18));
-        require(salesDonePerUser[msg.sender] == false);
+    modifier validPurchase(uint256 amountUSDT_6decimal) {
+        require(started, "Contract not started.");
+        require(!isWhitelistEnabled || whitelistedAddresses[getSlicedAddress(msg.sender)] == true, "Not whitelisted.");
+        require(amountUSDT_6decimal >= minWeiPurchasable, "Below min price allowed.");
+        require(amountUSDT_6decimal <= (whitelistedAddressesCap[getSlicedAddress(msg.sender)]).mul(10**6), "Above max price allowed.");
+        require(salesDonePerUser[msg.sender] == false, "Address has already bought token.");
         _;
     }
 
@@ -454,7 +463,7 @@ contract RevoPreSaleContract is Ownable {
 
     function addToWhitelist(bytes memory _address) public onlyOwner {
         whitelistedAddresses[_address] = true;
-        whitelistedAddressesCap[_address] = 5;
+        whitelistedAddressesCap[_address] = 900;
     }
     
     function addToWhitelist(bytes[] memory addresses) public onlyOwner {
