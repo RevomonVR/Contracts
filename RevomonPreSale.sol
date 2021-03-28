@@ -335,12 +335,12 @@ contract RevoPreSaleContract is Ownable {
     bool public isListingDone;
     
     // 0.11 USDT
-    uint256 public constant BASE_PRICE_6_DECIMAL = 110000;
+    uint256 public constant BASE_PRICE_IN_WEI = 110000000000000000;
     
     bool public isWhitelistEnabled = true;
     
     /// minimum = 900 USDT
-    uint256 public minWeiPurchasable = 900000000;
+    uint256 public minWeiPurchasable = 1000000000000000000;
     mapping (bytes=>bool) public whitelistedAddresses;
     mapping (bytes=>uint256) public whitelistedAddressesCap;
     mapping (address=>bool) public salesDonePerUser;
@@ -394,18 +394,18 @@ contract RevoPreSaleContract is Ownable {
     /**
    * Low level token purchase function
    */
-    function buyTokens(uint256 amountUSDT_6_decimal) public payable validPurchase(amountUSDT_6_decimal) {
+    function buyTokens(uint256 amountUSDTInWei) public payable validPurchase(amountUSDTInWei) {
         salesDonePerUser[msg.sender] = true;
 
-        uint256 tokenCount = amountUSDT_6_decimal.div(BASE_PRICE_6_DECIMAL);
-        uint amountUSDTInWei = amountUSDT_6_decimal.mul(10**12);
+        uint256 tokenCount = amountUSDTInWei.div(BASE_PRICE_IN_WEI);
+
         tokenPurchased = tokenPurchased.add(tokenCount);
         
         require(tokenPurchased <= tokenCap, "Not enough token for sale.");
     
         contributors = contributors.add(1);
         
-        forwardFunds(amountUSDT_6_decimal);
+        forwardFunds(amountUSDTInWei);
         
         uint lockAmountStage = calculatePercentage(amountUSDTInWei, 20, 1000000);
         lock("lock_1", lockAmountStage, 0); //First unlock at listing
@@ -413,15 +413,15 @@ contract RevoPreSaleContract is Ownable {
         lock("lock_3", lockAmountStage, 3628800); //Third unlock 42 days after the pre-sale - 42 * 86400 = 3628800
         lock("lock_4", lockAmountStage, 4838400); //Fourht unlock 56 days after the pre-sale - 56 * 86400 = 4838400
         lock("lock_5", lockAmountStage, 6048000); //Fifth unlock 70 days after the pre-sale - 70 * 86400 = 6048000
-        
+
         emit BuyTokenEvent(tokenPurchased);
     }
     
-    modifier validPurchase(uint256 amountUSDT_6decimal) {
+    modifier validPurchase(uint256 amountUSDTInWei) {
         require(started, "Contract not started.");
         require(!isWhitelistEnabled || whitelistedAddresses[getSlicedAddress(msg.sender)] == true, "Not whitelisted.");
-        require(amountUSDT_6decimal >= minWeiPurchasable, "Below min price allowed.");
-        require(amountUSDT_6decimal <= (whitelistedAddressesCap[getSlicedAddress(msg.sender)]).mul(10**6), "Above max price allowed.");
+        require(amountUSDTInWei >= minWeiPurchasable, "Below min price allowed.");
+        require(amountUSDTInWei <= (whitelistedAddressesCap[getSlicedAddress(msg.sender)]).mul(10**18), "Above max price allowed.");
         require(salesDonePerUser[msg.sender] == false, "Address has already bought token.");
         _;
     }
@@ -463,7 +463,7 @@ contract RevoPreSaleContract is Ownable {
 
     function addToWhitelist(bytes memory _address) public onlyOwner {
         whitelistedAddresses[_address] = true;
-        whitelistedAddressesCap[_address] = 900;
+        whitelistedAddressesCap[_address] = 800;
     }
     
     function addToWhitelist(bytes[] memory addresses) public onlyOwner {
