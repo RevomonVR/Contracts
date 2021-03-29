@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="css.css">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <link rel="shortcut icon" type="image/png" href="logo.svg">
+    <link rel="apple-touch-icon" sizes="192x192" href="https://app.uniswap.org/images/192x192_App_Icon.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="https://app.uniswap.org/images/512x512_App_Icon.png">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="theme-color" content="rgb(48 32 97)">
+    <meta name="fortmatic-site-verification" content="j93LgcVZk79qcgyo">
+    <link rel="manifest" href="https://app.uniswap.org/manifest.json">
+    <title>Revomon sales interface</title>
+    <style data-styled="" data-styled-version="4.4.1"></style>
+    <style data-emotion="css"></style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Get some bootstrap default styles -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+  </head>
+  <body style="font-family: Verdana;background-color: rgba(25,6,78,25);">
+    <!-- Construct a Bootstrap layout -->
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root">
+        <div class="sc-fHSTwm gRDOjf">
+           <div class="sc-VJcYb idJlsS">
+              <div style="display: flex;">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                 </svg>
+                 Always make sure the URL is<code style="padding: 0px 4px; display: inline; font-weight: bold;">app.uniswap.org</code> - bookmark it to be safe.
+              </div>
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="sc-ipXKqB cqdpE">
+                 <line x1="18" y1="6" x2="6" y2="18"></line>
+                 <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+           </div>
+           <div class="sc-hdPSEv bWLdma">
+              <div class="sc-jzgbtB fgXcZI">
+                 <div class="sc-gqjmRU sc-jTzLTM sc-kAzzGY sc-CtfFt jEobSa">
+                    <a href="." class="sc-itybZL cNSfQo">
+                       <div class="sc-eMigcr gttaSL"><img width="50px" src="logo.svg" alt="logo"></div>
+                    </a>
+                    
+                 </div>
+                 <div class="sc-gJWqzi jgYlDe">
+                    <div class="sc-rBLzX gpuNeG">
+                        <span class="sc-bHwgHz icDMfg">
+                          <div id = "network-name" class="sc-gqjmRU sc-TOsTZ sc-frDJqD sc-krDsej fvevgm">-</div>
+                        </span>
+                        <div id="prepare">
+                            <button style="width:20rem;" id="btn-connect" class="sc-gqjmRU gacWOr sc-jAaTju sc-jDwBTQ loiNTS">
+                                <div class="css-10ob8xa">Connect wallet</div>
+                            </button>
+                        </div>
+                
+                        <div id="connected" style="display: none">
+                            <div class="sc-hGoxap fymEiC" style="pointer-events: auto;">
+                                <div id ="wallet-eth" class="sc-dTdPqK dNxfRA css-8visvh" style="flex-shrink: 0;">0</div>
+                                <button id="web3-status-connected" class="sc-gqjmRU gacWOr sc-jAaTju sc-jlyJG sc-bMVAic sc-GMQeP dptUXe">
+                                   <p id ="wallet-address" class="sc-exAgwC coGaNG">-</p>
+                                </button>
+                             </div>
+                        </div>
+                      
+                    </div>
+                 </div>
+              </div>
+           </div>
+           <div class="sc-cmIlrE hyUNPk">
+              <div class="sc-ifAKCX sc-jtggT kNVhQO"></div>
+              <div height="0" class="sc-bmyXtO fJsQFZ">
+                 <div class="sc-dEoRIm jRcTX"></div>
+              </div>
+             
+              <div id="sale-title" style="color:white; margin-bottom: 1vh; font-size: 3vh;"></div>
+              <div class="sc-hgRTRy fFtdTG">
+                 <div id="swap-page" class="sc-eLExRp jURmWA">
+                    <div id="swap-interface" class="sc-ifAKCX dcxnAx" style="display:none">
+                       <div id="swap-currency-input" class="sc-gRnDUn eumSNl">
+                          <div class="sc-cmjSyW cfoBFS">
+                             <div class="sc-hBbWxd jckXdu">
+                                <div class="sc-gqjmRU sc-jTzLTM sc-fjdhpX dlUWaR">
+                                   <div class="sc-cMljjf fUEYHJ css-1rhdhic">From</div>
+                                   <div id="balance-from" class="sc-cMljjf fUEYHJ css-1rhdhic" style="display: inline; cursor: pointer;">Balance: 0</div>
+                                </div>
+                             </div>
+                             <div class="sc-bFADNz iLTNIw">
+                                <input id="input-eth" class="sc-BngTV hRuNeK token-amount-input" inputmode="decimal" title="Token Amount" autocomplete="off" autocorrect="off" type="text" pattern="^[0-9]*[.,]?[0-9]*$" placeholder="0.0" minlength="1" maxlength="79" spellcheck="false" value="0">
+                                <button id="btn-max-ether" class="sc-iYUSvU gMAAgJ">MAX</button>
+                                <button class="sc-cqpYsc erZkGr open-currency-select-button">
+                                   <span class="sc-dyGzUR kaRIhY">
+                                      <img src="tether.png" class="sc-kaNhvL etIwBS"><span class="sc-sdtwF ihhXrL token-symbol-container">USDT</span>
+
+                                   </span>
+                                </button>
+                             </div>
+                          </div>
+                       </div>
+                       
+                       <div id="swap-currency-output" class="sc-gRnDUn eumSNl">
+                          <div class="sc-cmjSyW cfoBFS">
+                             <div class="sc-hBbWxd jckXdu">
+                                <div class="sc-gqjmRU sc-jTzLTM sc-fjdhpX dlUWaR">
+                                   <div class="sc-cMljjf fUEYHJ css-1rhdhic">To (estimated)</div>
+                                </div>
+                             </div>
+                             <div class="sc-bFADNz iLTNIw">
+                                <input id="output-revo" class="sc-BngTV hRuNeK token-amount-input" inputmode="decimal" title="Token Amount" autocomplete="off" autocorrect="off" type="text" pattern="^[0-9]*[.,]?[0-9]*$" placeholder="0.0" minlength="1" maxlength="79" spellcheck="false" value="0">
+                                <button class="sc-cqpYsc erZkGr open-currency-select-button">
+                                   <span class="sc-dyGzUR kaRIhY">
+                                      <div class="sc-eMigcr gttaSL"><img width="24px" src="logo.png" alt="logo"></div>
+                                      <span class="sc-sdtwF ihhXrL token-symbol-container">REVO</span>
+                                   </span>
+                                </button>
+                             </div>
+                          </div>
+                       </div>
+                       <div class="sc-gqjmRU sc-TOsTZ lfLYkJ">
+                          <div class="sc-ifAKCX hXeOUM" style="padding: 0px 16px;">
+                             <div class="sc-gqjmRU sc-jTzLTM sc-fjdhpX dlUWaR">
+                                <div  id="revo-price" class="css-1rhdhic" style="justify-content: center; align-items: center; display: flex;"></div>
+                                                              </div>
+                          </div>
+                       </div>
+                       <div  id="whitelist_OK" class="" style="font-size: 2rem;color: #4300ff;padding: 2rem;justify-content: center; align-items: center; display: none;">You are whitelisted, congrats!</div>
+                        <div  id="whitelist_NOK" class="" style="font-size: 2rem;color: #ff0000;padding: 2rem;justify-content: center; align-items: center; display: flex;">Sorry, you are not whitelisted.</div>
+                    </div>
+                    <div class="sc-fYiAbW gOIlKf">
+                        <div id="prepare2">
+                            <button id="btn-connect2" class="sc-gqjmRU gacWOr sc-jAaTju sc-jDwBTQ loiNTS">
+                                <div class="css-10ob8xa">Connect wallet</div>
+                            </button>
+                        </div>
+                        <div id="connected2" style="display: none">
+                            <button id="swap-button" style="background-color: #286090;" class="sc-gqjmRU gacWOr sc-jAaTju sc-jDwBTQ loiNTS">
+                                <div class="css-10ob8xa">Swap</div>
+                            </button>
+                        </div>
+                        <div id="approve" style="display: none">
+                           <button id="approve-button" style="background-color: #286090;" class="sc-gqjmRU gacWOr sc-jAaTju sc-jDwBTQ loiNTS">
+                               <div class="css-10ob8xa">Approve sale</div>
+                           </button>
+                       </div>
+                    </div>
+                 </div>
+              </div>
+                <div id="progressBarContainer" style="width:70%; margin-top:5vh;display:none">
+                    <div style="color:white;text-align: center;font-size: 3vh;">Sale progress</div>
+                    <div class="progressBarParent">
+                        <div id="startProgress" style="color: white;width: 10%;text-align: right;font-size: 1vw;"></div>
+                            <div id="progressBar">
+                                <div id="barStatus" style="width: 78%;"></div>
+                            </div>
+                        <div id="endProgress" style="color: white;width: 10%;text-align: left;font-size: 1vw;"></div>
+                    </div>
+                </div>
+           </div>
+        </div>
+     </div>
+        
+          
+        
+     
+
+    <!-- We use simple <template> templating for the example -->
+    <div id="templates" style="display: none">
+      <template id="template-balance">
+        <tr>
+          <th class="address"></th>
+          <td class="balance"></td>
+        </tr>
+      </template>
+    </div>
+    <script type="text/javascript" src="https://unpkg.com/web3@1.3.4/dist/web3.min.js"></script>
+    <script type="text/javascript" src="https://unpkg.com/web3modal@1.9.0/dist/index.js"></script>
+    <script type="text/javascript" src="https://unpkg.com/evm-chains@0.2.0/dist/umd/index.min.js"></script>
+    <script type="text/javascript" src="https://unpkg.com/@walletconnect/web3-provider@1.2.1/dist/umd/index.min.js"></script>
+    <script type="text/javascript" src="./bignumber/bignumber.js"></script>
+    <script type="text/javascript" src="./index.js"></script>
+  </body>
+</html>
