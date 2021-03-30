@@ -1,10 +1,8 @@
 "use strict";
 
 const Web3Modal = window.Web3Modal.default;
-const WalletConnectProvider = new WalletConnectProvider({
-    56: "https://bsc-dataseed.binance.org/"
-});
 const evmChains = window.evmChains;
+const WalletConnectProvider = window.WalletConnectProvider.default;
 const revoPrice = 0.11;
 const ethPeggedPrice = 1800;
 
@@ -37,9 +35,28 @@ var maxAllowanceString = "115792089237316195423570985008687907853269984665640564
  * Setup the orchestra
  */
 function init() {
+  //const WalletConnectProvider = window.WalletConnectProvider.default;
+  /*const WalletConnectProvider = new WalletConnectProvider({
+    56: "https://bsc-dataseed.binance.org/"
+  });*/
+
+  /*this.provider = new WalletConnectProvider({
+    rpc: {
+        56: "https://bsc-dataseed.binance.org/"
+    }
+  });*/
+  const provider = new WalletConnectProvider({
+    rpc: {
+      1: "https://mainnet.mycustomnode.com",
+      3: "https://ropsten.mycustomnode.com",
+      100: "https://dai.poa.network",
+      // ...
+    },
+  });
+
   const providerOptions = {
     walletconnect: {
-      package: WalletConnectProvider,
+      package: provider,
       options: {
         infuraId: "4200cca977834ee1bfcceef1913c3c91",
       }
