@@ -192,130 +192,6 @@ contract Ownable is Context {
 }
  
 
-
-/**
- * @title ERC1132 interface
- * @dev see https://github.com/ethereum/EIPs/issues/1132
- */
-
-abstract contract ERC1132 {
-    /**
-     * @dev Reasons why a user's tokens have been locked
-     */
-    mapping(address => bytes32[]) public lockReason;
-
-    /**
-     * @dev locked token structure
-     */
-    struct lockToken {
-        uint256 amount;
-        uint256 validity;
-        bool claimed;
-    }
-
-    /**
-     * @dev Holds number & validity of tokens locked for a given reason for
-     *      a specified address
-     */
-    mapping(address => mapping(bytes32 => lockToken)) public locked;
-
-    /**
-     * @dev Records data of all the tokens Locked
-     */
-    event Locked(
-        address indexed _of,
-        bytes32 indexed _reason,
-        uint256 _amount,
-        uint256 _validity
-    );
-
-    /**
-     * @dev Records data of all the tokens unlocked
-     */
-    event Unlocked(
-        address indexed _of,
-        bytes32 indexed _reason,
-        uint256 _amount
-    );
-    
-    /**
-     * @dev Locks a specified amount of tokens against an address,
-     *      for a specified reason and time
-     * @param _reason The reason to lock tokens
-     * @param _amount Number of tokens to be locked
-     * @param _time Lock time in seconds
-     */
-    function lock(string memory _reason, uint256 _amount, uint256 _time)
-        public virtual returns (bool);
-  
-    /**
-     * @dev Returns tokens locked for a specified address for a
-     *      specified reason
-     *
-     * @param _of The address whose tokens are locked
-     * @param _reason The reason to query the lock tokens for
-     */
-    function tokensLocked(address _of, string memory _reason)
-        public virtual view returns (uint256 amount);
-    
-    /**
-     * @dev Returns tokens locked for a specified address for a
-     *      specified reason at a specific time
-     *
-     * @param _of The address whose tokens are locked
-     * @param _reason The reason to query the lock tokens for
-     * @param _time The timestamp to query the lock tokens for
-     */
-    function tokensLockedAtTime(address _of, string memory _reason, uint256 _time)
-        public virtual view returns (uint256 amount);
-    
-    /**
-     * @dev Returns total tokens held by an address (locked + transferable)
-     * @param _of The address to query the total balance of
-     */
-    function totalBalanceOf(address _of)
-        public virtual view returns (uint256 amount);
-    
-    /**
-     * @dev Extends lock for a specified reason and time
-     * @param _reason The reason to lock tokens
-     * @param _time Lock extension time in seconds
-     */
-    function extendLock(string memory _reason, uint256 _time)
-        public virtual returns (bool);
-    
-    /**
-     * @dev Increase number of tokens locked for a specified reason
-     * @param _reason The reason to lock tokens
-     * @param _amount Number of tokens to be increased
-     */
-    function increaseLockAmount(string memory _reason, uint256 _amount)
-        public virtual returns (bool);
-
-    /**
-     * @dev Returns unlockable tokens for a specified address for a specified reason
-     * @param _of The address to query the the unlockable token count of
-     * @param _reason The reason to query the unlockable tokens for
-     */
-    function tokensUnlockable(address _of, string memory _reason)
-        public virtual view returns (uint256 amount);
- 
-    /**
-     * @dev Unlocks the unlockable tokens of a specified address
-     * @param _of Address of user, claiming back unlockable tokens
-     */
-    function unlock(address _of)
-        public virtual returns (uint256 unlockableTokens);
-
-    /**
-     * @dev Gets the unlockable tokens of a specified address
-     * @param _of The address to query the the unlockable token count of
-     */
-    function getUnlockableTokens(address _of)
-        public virtual view returns (uint256 unlockableTokens);
-
-}
-
 interface IRevoTokenContract{
   function balanceOf(address account) external view returns (uint256);
   function totalSupply() external view returns (uint256);
@@ -333,21 +209,32 @@ contract RevoPreSaleContract is Ownable {
     uint256 public tokenPurchased;
     uint256 public contributors;
     bool public isListingDone;
-    
-    // 0.11 USDT
-    uint256 public constant BASE_PRICE_IN_WEI = 110000000000000000;
-    
     bool public isWhitelistEnabled = true;
-    
-    /// minimum = 900 USDT
-    uint256 public minWeiPurchasable = 1000000000000000000;
-    mapping (bytes=>bool) public whitelistedAddresses;
-    mapping (bytes=>uint256) public whitelistedAddressesCap;
-    mapping (address=>bool) public salesDonePerUser;
-    IRevoTokenContract private token;
-    IRevoTokenContract private usdtToken;
-    uint256 public tokenCap;
     bool public started = true;
+    
+    // PRE-SALE PRICE 0.11 USDT
+    uint256 public constant BASE_PRICE_IN_WEI = 110000000000000000;
+    uint256 public constant FOURTEEN_DAYS_IN_SECONDS = 1209600;
+    
+    mapping (address=>bool) public whitelistedAddresses;
+    mapping (address=>uint256) public whitelistedAddressesCap;
+    mapping (address=>bool) public salesDonePerUser;
+    
+     /// minimum = 900 USDT
+    uint256 public minWeiPurchasable = 1000000000000000000;
+    //MAX ALLOCATION BY DEFAULT
+    uint256 public maxDefaultUsdtETH = 5000;
+    //TOKEN CAP 
+    uint256 public tokenCapRevo;
+    
+    //Vesting start date 04/12/2021 6PM00
+    uint256 public vestingStartTime = 1618250400;
+    
+    //ADDRESSES & CONTRACTS
+    address public usdtAddress;
+    address public revoAddress;
+    IRevoTokenContract private revoToken;
+    IRevoTokenContract private usdtToken;
     
     event BuyTokenEvent(uint _tokenPurchased);
   
@@ -385,10 +272,10 @@ contract RevoPreSaleContract is Ownable {
     * @dev constructor to mint initial tokens
     * Shall update to _mint once openzepplin updates their npm package.
     */
-    constructor(address revoTokenAddress, address usdtAddress, uint256 maxCap) public {
-        token = IRevoTokenContract(revoTokenAddress);
-        usdtToken = IRevoTokenContract(usdtAddress);
-        tokenCap = maxCap;
+    constructor(address revoTokenAddress, address usdtAddress, uint256 maxCapRevo) public {
+        setUSDTAddress(usdtAddress);
+        setRevoAddress(revoTokenAddress);
+        tokenCapRevo = maxCapRevo;
     }
     
     /**
@@ -401,27 +288,38 @@ contract RevoPreSaleContract is Ownable {
 
         tokenPurchased = tokenPurchased.add(tokenCount);
         
-        require(tokenPurchased <= tokenCap, "Not enough token for sale.");
+        require(tokenPurchased <= tokenCapRevo, "Not enough token for sale.");
     
         contributors = contributors.add(1);
         
         forwardFunds(amountUSDTInWei);
         
-        uint lockAmountStage = calculatePercentage(amountUSDTInWei, 20, 1000000);
+        //LOCK PART
+        uint256 tokenCountWei = amountUSDTInWei.mul(10**18).div(BASE_PRICE_IN_WEI);
+        uint lockAmountStage = calculatePercentage(tokenCountWei, 20, 1000000);
+        /*
         lock("lock_1", lockAmountStage, 0); //First unlock at listing
-        lock("lock_2", lockAmountStage, 2419200); //Second unlock 28 days after the pre-sale - 28 * 86400 = 2419200
-        lock("lock_3", lockAmountStage, 3628800); //Third unlock 42 days after the pre-sale - 42 * 86400 = 3628800
-        lock("lock_4", lockAmountStage, 4838400); //Fourht unlock 56 days after the pre-sale - 56 * 86400 = 4838400
-        lock("lock_5", lockAmountStage, 6048000); //Fifth unlock 70 days after the pre-sale - 70 * 86400 = 6048000
+        lock("lock_2", lockAmountStage, vestingStartTime.sub(now).add(FOURTEEN_DAYS_IN_SECONDS.mul(1))); //04/12/2021 + 14 days
+        lock("lock_3", lockAmountStage, vestingStartTime.sub(now).add(FOURTEEN_DAYS_IN_SECONDS.mul(2))); //04/12/2021 + 28 days
+        lock("lock_4", lockAmountStage, vestingStartTime.sub(now).add(FOURTEEN_DAYS_IN_SECONDS.mul(3))); //04/12/2021 + 42 days
+        lock("lock_5", lockAmountStage, vestingStartTime.sub(now).add(FOURTEEN_DAYS_IN_SECONDS.mul(4))); //04/12/2021 + 56 days
+        */
+        /*TEST*/
+        lock("lock_1", lockAmountStage, 0); //First unlock at listing
+        lock("lock_2", lockAmountStage, 60); //04/12/2021 + 14 days
+        lock("lock_3", lockAmountStage, 120); //04/12/2021 + 28 days
+        lock("lock_4", lockAmountStage, 180); //04/12/2021 + 42 days
+        lock("lock_5", lockAmountStage, 240); //04/12/2021 + 56 days
+        
 
         emit BuyTokenEvent(tokenPurchased);
     }
     
     modifier validPurchase(uint256 amountUSDTInWei) {
-        require(started, "Contract not started.");
-        require(!isWhitelistEnabled || whitelistedAddresses[getSlicedAddress(msg.sender)] == true, "Not whitelisted.");
+        require(started, "Pre-sale not started.");
+        require(!isWhitelistEnabled || whitelistedAddresses[msg.sender] == true, "Not whitelisted.");
         require(amountUSDTInWei >= minWeiPurchasable, "Below min price allowed.");
-        require(amountUSDTInWei <= (whitelistedAddressesCap[getSlicedAddress(msg.sender)]).mul(10**18), "Above max price allowed.");
+        require(amountUSDTInWei <= (whitelistedAddressesCap[msg.sender]).mul(10**18), "Above max price allowed.");
         require(salesDonePerUser[msg.sender] == false, "Address has already bought token.");
         _;
     }
@@ -450,48 +348,53 @@ contract RevoPreSaleContract is Ownable {
         started = value;
     }
     
-    function addToWhitelistPartners(bytes[] memory _addresses, uint256[] memory _maxCaps) public onlyOwner {
+    function addToWhitelistPartners(address[] memory _addresses, uint256[] memory _maxCaps) public onlyOwner {
         for(uint256 i = 0; i < _addresses.length; i++) {
             whitelistedAddresses[_addresses[i]] = true;
             updateWhitelistAdressCap(_addresses[i], _maxCaps[i]);
         }
     }
     
-    function updateWhitelistAdressCap(bytes memory _address, uint256 _maxCap) public onlyOwner {
+    function updateWhitelistAdressCap(address _address, uint256 _maxCap) public onlyOwner {
         whitelistedAddressesCap[_address] = _maxCap;
     }
 
-    function addToWhitelist(bytes memory _address) public onlyOwner {
+    function addToWhitelist(address _address) public onlyOwner {
         whitelistedAddresses[_address] = true;
-        whitelistedAddressesCap[_address] = 800;
+        whitelistedAddressesCap[_address] = maxDefaultUsdtETH;
     }
     
-    function addToWhitelist(bytes[] memory addresses) public onlyOwner {
+    function addToWhitelist(address[] memory addresses) public onlyOwner {
         for(uint i = 0; i < addresses.length; i++) {
             addToWhitelist(addresses[i]);
         }
     }
     
     function isAddressWhitelisted(address _address) view public returns(bool) {
-        return !isWhitelistEnabled || whitelistedAddresses[getSlicedAddress(_address)] == true;
+        return !isWhitelistEnabled || whitelistedAddresses[_address] == true;
     }
     
     function withdrawTokens(uint256 amount) public onlyOwner {
-        token.transfer(owner(), amount);
-    }
-    
-    function getSlicedAddress(address _address) public pure returns(bytes memory) {
-        bytes memory addressBytes = abi.encodePacked(_address);
-        bytes memory addressSliced = sliceAddress(addressBytes);
-        return addressSliced;
-    }
-    
-    function sliceAddress(bytes memory addrBytes) private pure returns(bytes memory) {
-        return abi.encodePacked(addrBytes[0], addrBytes[1], addrBytes[7], addrBytes[19]);
+        revoToken.transfer(owner(), amount);
     }
     
     function setListingDone(bool isDone) public onlyOwner {
         isListingDone = isDone;
+    }
+    
+    function setUSDTAddress(address _usdtAddress) public onlyOwner{
+        usdtAddress = _usdtAddress;
+        usdtToken = IRevoTokenContract(_usdtAddress);
+    }
+    
+    function setRevoAddress(address _revoAddress) public onlyOwner{
+        revoAddress = _revoAddress;
+        revoToken = IRevoTokenContract(_revoAddress);
+    }
+    
+    //ETH Value not WEI
+    function setMaxDefaultUsdtAllocInEth(uint256 _maxDefaultUsdtETH) public onlyOwner{
+        maxDefaultUsdtETH = _maxDefaultUsdtETH;
     }
     
     /*
@@ -517,8 +420,6 @@ contract RevoPreSaleContract is Ownable {
         if (locked[msg.sender][reason].amount == 0)
             lockReason[msg.sender].push(reason);
 
-        token.transferFrom(msg.sender, address(this), _amount);
-
         locked[msg.sender][reason] = lockToken(_amount, validUntil, false);
 
         emit Locked(msg.sender, reason, _amount, validUntil);
@@ -543,12 +444,12 @@ contract RevoPreSaleContract is Ownable {
      * @param _of The address to query the total balance of
      */
     function totalBalanceOf(address _of) public view returns (uint256 amount) {
-        amount = token.balanceOf(_of);
+        amount = revoToken.balanceOf(_of);
 
         for (uint256 i = 0; i < lockReason[_of].length; i++) {
             amount = amount.add(tokensLocked(_of, bytes32ToString(lockReason[_of][i])));
         }   
-    }    
+    }
 
     /**
      * @dev Returns unlockable tokens for a specified address for a specified reason
@@ -579,7 +480,7 @@ contract RevoPreSaleContract is Ownable {
         }  
 
         if (unlockableTokens > 0)
-            token.transfer(msg.sender, unlockableTokens);
+            revoToken.transfer(msg.sender, unlockableTokens);
     }
 
     /**
