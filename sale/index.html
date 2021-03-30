@@ -4,12 +4,12 @@
     <link rel="stylesheet" href="css.css">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <link rel="shortcut icon" type="image/png" href="logo.svg">
-    <link rel="apple-touch-icon" sizes="192x192" href="https://app.uniswap.org/images/192x192_App_Icon.png">
-    <link rel="apple-touch-icon" sizes="512x512" href="https://app.uniswap.org/images/512x512_App_Icon.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="logo.svg">
+    <link rel="apple-touch-icon" sizes="512x512" href="logo.svg">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="theme-color" content="rgb(48 32 97)">
     <meta name="fortmatic-site-verification" content="j93LgcVZk79qcgyo">
-    <link rel="manifest" href="https://app.uniswap.org/manifest.json">
+
     <title>Revomon sales interface</title>
     <style data-styled="" data-styled-version="4.4.1"></style>
     <style data-emotion="css"></style>
@@ -23,20 +23,6 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root">
         <div class="sc-fHSTwm gRDOjf">
-           <div class="sc-VJcYb idJlsS">
-              <div style="display: flex;">
-                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
-                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                    <line x1="12" y1="9" x2="12" y2="13"></line>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                 </svg>
-                 Always make sure the URL is<code style="padding: 0px 4px; display: inline; font-weight: bold;">app.uniswap.org</code> - bookmark it to be safe.
-              </div>
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="sc-ipXKqB cqdpE">
-                 <line x1="18" y1="6" x2="6" y2="18"></line>
-                 <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-           </div>
            <div class="sc-hdPSEv bWLdma">
               <div class="sc-jzgbtB fgXcZI">
                  <div class="sc-gqjmRU sc-jTzLTM sc-kAzzGY sc-CtfFt jEobSa">
@@ -50,6 +36,7 @@
                         <span class="sc-bHwgHz icDMfg">
                           <div id = "network-name" class="sc-gqjmRU sc-TOsTZ sc-frDJqD sc-krDsej fvevgm">-</div>
                         </span>
+
                         <div id="prepare">
                             <button style="width:20rem;" id="btn-connect" class="sc-gqjmRU gacWOr sc-jAaTju sc-jDwBTQ loiNTS">
                                 <div class="css-10ob8xa">Connect wallet</div>
@@ -76,7 +63,7 @@
               </div>
              
               <div id="sale-title" style="color:white; margin-bottom: 1vh; font-size: 3vh;"></div>
-              <div class="sc-hgRTRy fFtdTG">
+              <div id="main-interface" class="sc-hgRTRy fFtdTG">
                  <div id="swap-page" class="sc-eLExRp jURmWA">
                     <div id="swap-interface" class="sc-ifAKCX dcxnAx" style="display:none">
                        <div id="swap-currency-input" class="sc-gRnDUn eumSNl">
@@ -111,7 +98,7 @@
                                 <input id="output-revo" class="sc-BngTV hRuNeK token-amount-input" inputmode="decimal" title="Token Amount" autocomplete="off" autocorrect="off" type="text" pattern="^[0-9]*[.,]?[0-9]*$" placeholder="0.0" minlength="1" maxlength="79" spellcheck="false" value="0">
                                 <button class="sc-cqpYsc erZkGr open-currency-select-button">
                                    <span class="sc-dyGzUR kaRIhY">
-                                      <div class="sc-eMigcr gttaSL"><img width="24px" src="logo.png" alt="logo"></div>
+                                      <div class="sc-eMigcr gttaSL"><img width="24px" src="logo.svg" alt="logo"></div>
                                       <span class="sc-sdtwF ihhXrL token-symbol-container">REVO</span>
                                    </span>
                                 </button>
@@ -135,18 +122,102 @@
                             </button>
                         </div>
                         <div id="connected2" style="display: none">
-                            <button id="swap-button" style="background-color: #286090;" class="sc-gqjmRU gacWOr sc-jAaTju sc-jDwBTQ loiNTS">
+                            <button id="swap-button" style="background-color: #3673e4;" class="sc-gqjmRU gacWOr sc-jAaTju sc-jDwBTQ loiNTS">
                                 <div class="css-10ob8xa">Swap</div>
                             </button>
                         </div>
                         <div id="approve" style="display: none">
-                           <button id="approve-button" style="background-color: #286090;" class="sc-gqjmRU gacWOr sc-jAaTju sc-jDwBTQ loiNTS">
+                           <button id="approve-button" style="background-color: #3673e4;" class="sc-gqjmRU gacWOr sc-jAaTju sc-jDwBTQ loiNTS">
                                <div class="css-10ob8xa">Approve sale</div>
                            </button>
                        </div>
                     </div>
                  </div>
               </div>
+
+               <div id="loading-interface" style="display:none" class="lds-ring"><div></div><div></div><div></div><div></div></div>
+
+              <div id="unlock-interface" class="sc-hgRTRy fFtdTG" style="display:none;color:white;">
+               <div class="sc-eLExRp jURmWA">
+               <div style="padding: 2rem;">
+                  <div style="text-align: center;margin-bottom:2rem;font-size: 2rem;">
+                     Unlock schedule
+                  </div>
+
+                  <div>
+                     <div class="unlock">
+                        <div id="bullet1"   class="sc-BXqHe cJIYBD">1</div>
+                        <div id="line1" class="sc-hguquU gxWwff"></div>
+                     </div>
+                     <div class="unlock">
+                     At listing :
+                     </div>
+                     <div id="unlock-1" class="unlock">
+                     Now!
+                     </div>
+                  </div>
+
+                  <div>
+                     <div class="unlock">
+                        <div id="bullet2"   class="sc-BXqHe cJIYBD">2</div>
+                        <div id="line2"  class="sc-hguquU gxWwff"></div>
+                     </div>
+                     <div class="unlock">
+                     Unlock 2 :
+                     </div>
+                     <div id="unlock-2" class="unlock">
+                     X
+                     </div>
+                  </div>
+
+                  <div>
+                     <div class="unlock">
+                        <div id="bullet3"  class="sc-BXqHe cJIYBD">3</div>
+                        <div id="line3"  class="sc-hguquU gxWwff"></div>
+                     </div>
+                     <div class="unlock">
+                     Unlock 3 :
+                     </div>
+                     <div id="unlock-3" class="unlock">
+                     X
+                     </div>
+                  </div>
+
+                  <div>
+                     <div class="unlock">
+                        <div id="bullet4"   class="sc-BXqHe cJIYBD">4</div>
+                        <div id="line4"  class="sc-hguquU gxWwff"></div>
+                     </div>
+                     <div class="unlock">
+                     Unlock 4 :
+                     </div>
+                     <div id="unlock-4" class="unlock">
+                     X
+                     </div>
+                  </div>
+
+                  <div>
+                     <div class="unlock">
+                        <div id="bullet5"   class="sc-BXqHe cJIYBD">5</div>
+                     </div>
+                     <div class="unlock">
+                     Unlock 5 :
+                     </div>
+                     <div id="unlock-5" class="unlock">
+                     X
+                     </div>
+                  </div>
+               </div>
+                  <div id="unlock">
+                     <button id="unlock-button" style="background-color: #3673e4;" class="sc-gqjmRU gacWOr sc-jAaTju sc-jDwBTQ loiNTS">
+                         <div class="css-10ob8xa">Unlock</div>
+                     </button>
+
+                     <div id="loading-interface-unlock" style="display:none" class="lds-ring"><div></div><div></div><div></div><div></div></div>
+                 </div>
+               </div>
+            </div>
+
                 <div id="progressBarContainer" style="width:70%; margin-top:5vh;display:none">
                     <div style="color:white;text-align: center;font-size: 3vh;">Sale progress</div>
                     <div class="progressBarParent">
