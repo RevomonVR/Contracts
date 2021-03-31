@@ -57,9 +57,9 @@ body{min-height:100vh;background-position:0px 10vh;background-repeat:no-repeat;b
 }
 .jgYlDe{display:flex;flex-direction:row;-webkit-box-align:center;align-items:center;justify-self:flex-end;}
 @media (max-width: 960px){
-.jgYlDe{flex-direction:row;-webkit-box-pack:justify;justify-content:space-between;justify-self:center;max-width:960px;padding:1rem;position:fixed;bottom:0px;left:0px;width:100%;z-index:99;height:72px;border-radius:12px 12px 0px 0px;background-color:rgb(255, 255, 255);}
+.jgYlDe{flex-direction:row;-webkit-box-pack:justify;justify-content:space-between;justify-self:center;max-width:960px;padding:1rem;position:fixed;bottom:0px;left:0px;width:100%;z-index:99;height:72px;border-radius:12px 12px 0px 0px;background-color:rgb(13 28 74);}
 }
-.gpuNeG{display:flex;-webkit-box-align:center;align-items:center;}
+.gpuNeG{display:flex;-webkit-box-align:center;align-items:center;margin: 0 auto;}
 .gpuNeG > :not(:first-child){margin-left:8px;}
 @media (max-width: 960px){
 .gpuNeG{flex-direction:row-reverse;-webkit-box-align:center;align-items:center;}
@@ -211,6 +211,7 @@ body{min-height:100vh;background-position:0px 10vh;background-repeat:no-repeat;b
 }
 
 .unlock{display:inline-block;}
+.right{position: absolute;right: 0px;margin-right: 2rem;}
 .lds-ring {
     display: inline-block;
     position: relative;
