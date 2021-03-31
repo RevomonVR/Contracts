@@ -206,7 +206,7 @@ interface IRevoTokenContract{
 contract RevoPreSaleContract is Ownable {
     using SafeMath for uint;
     
-    uint256 public tokenPurchasedInWei;
+    uint256 public tokenPurchaseInWei;
     uint256 public contributors;
     bool public isListingDone;
     bool public isWhitelistEnabled = true;
@@ -287,9 +287,9 @@ contract RevoPreSaleContract is Ownable {
         //uint256 tokenCount = amountUSDTInWei.div(BASE_PRICE_IN_WEI);
         uint256 tokenCountWei = amountUSDTInWei.mul(10**18).div(BASE_PRICE_IN_WEI);
 
-        tokenPurchasedInWei = tokenPurchasedInWei.add(tokenCountWei);
+        tokenPurchaseInWei = tokenPurchaseInWei.add(tokenCountWei);
         
-        require(tokenPurchasedInWei <= tokenCapRevoInWei, "Not enough token for sale.");
+        require(tokenPurchaseInWei <= tokenCapRevoInWei, "Not enough token for sale.");
     
         contributors = contributors.add(1);
         
@@ -297,22 +297,15 @@ contract RevoPreSaleContract is Ownable {
         
         //LOCK PART
         uint lockAmountStage = calculatePercentage(tokenCountWei, 20, 1000000);
-        /*
+
         lock("lock_1", lockAmountStage, 0); //First unlock at listing
         lock("lock_2", lockAmountStage, vestingStartTime.sub(now).add(FOURTEEN_DAYS_IN_SECONDS.mul(1))); //04/12/2021 + 14 days
         lock("lock_3", lockAmountStage, vestingStartTime.sub(now).add(FOURTEEN_DAYS_IN_SECONDS.mul(2))); //04/12/2021 + 28 days
         lock("lock_4", lockAmountStage, vestingStartTime.sub(now).add(FOURTEEN_DAYS_IN_SECONDS.mul(3))); //04/12/2021 + 42 days
         lock("lock_5", lockAmountStage, vestingStartTime.sub(now).add(FOURTEEN_DAYS_IN_SECONDS.mul(4))); //04/12/2021 + 56 days
-        */
-        /*TEST*/
-        lock("lock_1", lockAmountStage, 0); //First unlock at listing
-        lock("lock_2", lockAmountStage, 60); //04/12/2021 + 14 days
-        lock("lock_3", lockAmountStage, 120); //04/12/2021 + 28 days
-        lock("lock_4", lockAmountStage, 180); //04/12/2021 + 42 days
-        lock("lock_5", lockAmountStage, 240); //04/12/2021 + 56 days
         
 
-        emit BuyTokenEvent(tokenPurchasedInWei);
+        emit BuyTokenEvent(tokenPurchaseInWei);
     }
     
     modifier validPurchase(uint256 amountUSDTInWei) {
