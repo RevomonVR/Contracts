@@ -206,7 +206,7 @@ interface IRevoTokenContract{
 contract RevoPreSaleContract is Ownable {
     using SafeMath for uint;
     
-    uint256 public tokenPurchased;
+    uint256 public tokenPurchasedInWei;
     uint256 public contributors;
     bool public isListingDone;
     bool public isWhitelistEnabled = true;
@@ -224,8 +224,8 @@ contract RevoPreSaleContract is Ownable {
     uint256 public minWeiPurchasable = 1000000000000000000;
     //MAX ALLOCATION BY DEFAULT
     uint256 public maxDefaultUsdtETH = 5000;
-    //TOKEN CAP 
-    uint256 public tokenCapRevo;
+    //TOKEN CAP IN WEI
+    uint256 public tokenCapRevoInWei;
     
     //Vesting start date 04/12/2021 6PM00
     uint256 public vestingStartTime = 1618250400;
@@ -272,10 +272,10 @@ contract RevoPreSaleContract is Ownable {
     * @dev constructor to mint initial tokens
     * Shall update to _mint once openzepplin updates their npm package.
     */
-    constructor(address revoTokenAddress, address usdtAddress, uint256 maxCapRevo) public {
+    constructor(address revoTokenAddress, address usdtAddress, uint256 maxCapRevoInWei) public {
         setUSDTAddress(usdtAddress);
         setRevoAddress(revoTokenAddress);
-        tokenCapRevo = maxCapRevo;
+        setTokenCapInWei(maxCapRevoInWei);
     }
     
     /**
@@ -284,18 +284,18 @@ contract RevoPreSaleContract is Ownable {
     function buyTokens(uint256 amountUSDTInWei) public payable validPurchase(amountUSDTInWei) {
         salesDonePerUser[msg.sender] = true;
 
-        uint256 tokenCount = amountUSDTInWei.div(BASE_PRICE_IN_WEI);
+        //uint256 tokenCount = amountUSDTInWei.div(BASE_PRICE_IN_WEI);
+        uint256 tokenCountWei = amountUSDTInWei.mul(10**18).div(BASE_PRICE_IN_WEI);
 
-        tokenPurchased = tokenPurchased.add(tokenCount);
+        tokenPurchasedInWei = tokenPurchasedInWei.add(tokenCountWei);
         
-        require(tokenPurchased <= tokenCapRevo, "Not enough token for sale.");
+        require(tokenPurchasedInWei <= tokenCapRevoInWei, "Not enough token for sale.");
     
         contributors = contributors.add(1);
         
         forwardFunds(amountUSDTInWei);
         
         //LOCK PART
-        uint256 tokenCountWei = amountUSDTInWei.mul(10**18).div(BASE_PRICE_IN_WEI);
         uint lockAmountStage = calculatePercentage(tokenCountWei, 20, 1000000);
         /*
         lock("lock_1", lockAmountStage, 0); //First unlock at listing
@@ -312,7 +312,7 @@ contract RevoPreSaleContract is Ownable {
         lock("lock_5", lockAmountStage, 240); //04/12/2021 + 56 days
         
 
-        emit BuyTokenEvent(tokenPurchased);
+        emit BuyTokenEvent(tokenPurchasedInWei);
     }
     
     modifier validPurchase(uint256 amountUSDTInWei) {
@@ -395,6 +395,11 @@ contract RevoPreSaleContract is Ownable {
     //ETH Value not WEI
     function setMaxDefaultUsdtAllocInEth(uint256 _maxDefaultUsdtETH) public onlyOwner{
         maxDefaultUsdtETH = _maxDefaultUsdtETH;
+    }
+    
+    //Set Token Cap in WEI
+    function setTokenCapInWei(uint256 _tokenCapRevoInWei) public onlyOwner{
+        tokenCapRevoInWei = _tokenCapRevoInWei;
     }
     
     /*
