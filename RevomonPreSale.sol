@@ -221,7 +221,7 @@ contract RevoPreSaleContract is Ownable {
     mapping (address=>bool) public salesDonePerUser;
     
      /// minimum = 900 USDT
-    uint256 public minWeiPurchasable = 1000000000000000000;
+    uint256 public minWeiPurchasable = 800000000000000000000;
     //MAX ALLOCATION BY DEFAULT
     uint256 public maxDefaultUsdtETH = 5000;
     //TOKEN CAP IN WEI
@@ -284,7 +284,6 @@ contract RevoPreSaleContract is Ownable {
     function buyTokens(uint256 amountUSDTInWei) public payable validPurchase(amountUSDTInWei) {
         salesDonePerUser[msg.sender] = true;
 
-        //uint256 tokenCount = amountUSDTInWei.div(BASE_PRICE_IN_WEI);
         uint256 tokenCountWei = amountUSDTInWei.mul(10**18).div(BASE_PRICE_IN_WEI);
 
         tokenPurchaseInWei = tokenPurchaseInWei.add(tokenCountWei);
