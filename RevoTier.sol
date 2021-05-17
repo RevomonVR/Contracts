@@ -1,4 +1,4 @@
-pragma solidity >=0.5.0;
+pragma solidity >=0.8.0;
 
 interface IRevoTokenContract{
   function balanceOf(address account) external view returns (uint256);
@@ -12,6 +12,12 @@ interface IRevoTokenContract{
 interface IRevoLib{
   function getLiquidityValue(uint256 liquidityAmount) external view returns (uint256 tokenRevoAmount, uint256 tokenBnbAmount);
   function getLpTokens(address _wallet) external view returns (uint256);
+  function tokenRevoAddress() external returns (address);
+}
+
+interface IRevoPoolManagerContract{
+  function getRevoStakedFromStakingPools(address wallet) external view returns (uint256);
+  function getLPStakedFromFarmingPools(address wallet) external view returns (uint256);
 }
 
 library SafeMath {
@@ -31,9 +37,9 @@ library SafeMath {
 contract Context {
     // Empty internal constructor, to prevent people from mistakenly deploying
     // an instance of this contract, which should be used via inheritance.
-    constructor () public { }
+    constructor () { }
 
-    function _msgSender() internal view virtual returns (address payable) {
+    function _msgSender() internal view virtual returns (address) {
         return msg.sender;
     }
 
@@ -48,7 +54,7 @@ contract Ownable is Context {
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
-    constructor () public {
+    constructor () {
         address msgSender = _msgSender();
         _owner = msgSender;
         emit OwnershipTransferred(address(0), msgSender);
@@ -82,6 +88,7 @@ contract RevoTier is Ownable{
     
     //TIER Struct
     struct Tier {
+        uint256 index;
         uint256 minRevoToHold;
         string name;
     }
@@ -92,19 +99,35 @@ contract RevoTier is Ownable{
     //Revo lib
     address public revoLibAddress;
     IRevoLib revoLib;
+    //Revo PoolManager 
+    address public revoPoolManagerAddress;
+    IRevoPoolManagerContract revoPoolManager;
     //Tiers
-    Tier[] public tiers;
+    Tier[6] public tiers;
     
-    //Condtions
-    bool public poolBalanceEnabled;
+    //Enable or disable balance fetch
+    bool public liquidityBalanceEnabled;
+    bool public stakingBalanceEnabled;
+    //Boost tier + 1 
+    bool public nftBoostEnabled;
+    //Max Tier boost 
+    uint256 maxTierIndexBoost;
     
-    constructor(address _revoAddress, address _revoLibAddress) public {
-        setRevo(_revoAddress);
-        setRevo(_revoLibAddress);
-        //Enable pool balance
-        setPoolBalanceEnable(true);
+    
+    constructor(address _revoLibAddress, address _revoPoolManager) {
+        setRevoLib(_revoLibAddress);
+        setRevoToken(revoLib.tokenRevoAddress());
+        setRevoPoolManager(_revoPoolManager);
+        //Enable liquidity balance
+        setLiquidityBalanceEnable(true);
+        //Enable staking balance
+        setStakingBalanceEnable(true);
+        //Enable NFT Tier boost 
+        setNftBoostEnable(false);
+        //Set Max tier index boost to 3 included
+        setMaxTierIndexBoost(3);
         
-        //tiers
+        //Tiers
         setTiers(0, 1000000000000000000000, "Trainee");
         setTiers(1, 2500000000000000000000, "Tamer");
         setTiers(2, 5000000000000000000000, "Ranger");
@@ -114,28 +137,39 @@ contract RevoTier is Ownable{
     }
     
     
-    function getRealTimeTier(address _wallet) public view returns(uint256) {
+    function getRealTimeTier(address _wallet) public view returns(Tier memory) {
         uint256 balance = revoToken.balanceOf(_wallet);
         
-        if(poolBalanceEnabled){
-            //If pool balance is enabled 
-            uint256 revoPoolTokens;
-            uint256 bnbPoolTokens;
-            (revoPoolTokens, bnbPoolTokens) = revoLib.getLiquidityValue(revoLib.getLpTokens(msg.sender));
-            
-            balance.add(revoPoolTokens);
+        //Get Revo from Cake V2 Pool & Farming pools 
+        if(liquidityBalanceEnabled){
+            //Get LP tokens from wallet balance & farming pools
+            uint256 lpTokens = revoLib.getLpTokens(_wallet).add(revoPoolManager.getLPStakedFromFarmingPools(_wallet));
+
+            balance = balance.add(getTokensFromLiquidity(lpTokens, true));
         }
         
-        uint256 tierIndex;
-        for(uint256 i = tiers.length - 1; i >= 1; i--){
+        //Get Revo from staking pools
+        if(stakingBalanceEnabled){
+            balance = balance.add(revoPoolManager.getRevoStakedFromStakingPools(_wallet));
+        }
+        
+        uint256 tierIndex = 9999;
+        for(uint256 i = 0; i < tiers.length; i++){
             if(balance >= tiers[i].minRevoToHold){
                 tierIndex = i;
             }
         }
-        return tierIndex;
+        
+        if(nftBoostEnabled && tierIndex <= maxTierIndexBoost){
+            //TODO 
+            tierIndex = tierIndex.add(1);
+        }
+        
+        return tierIndex < 9999 ? tiers[tierIndex] : Tier(99, 0, "");
     }
     
     function setTiers(uint256 _tierIndex, uint256 _minRevo, string memory _name) public onlyOwner{
+        tiers[_tierIndex].index = _tierIndex;
         tiers[_tierIndex].minRevoToHold = _minRevo;
         tiers[_tierIndex].name = _name;
     }
@@ -143,7 +177,7 @@ contract RevoTier is Ownable{
     /*
     Set revo Address & token
     */
-    function setRevo(address _revo) public onlyOwner {
+    function setRevoToken(address _revo) public onlyOwner {
         revoAddress = _revo;
         revoToken = IRevoTokenContract(revoAddress);
     }
@@ -157,9 +191,49 @@ contract RevoTier is Ownable{
     }
     
     /*
+    Set revoPoolManager Address & Interface
+    */
+    function setRevoPoolManager(address _revoPoolManager) public onlyOwner {
+        revoPoolManagerAddress = _revoPoolManager;
+        revoPoolManager = IRevoPoolManagerContract(_revoPoolManager);
+    }
+    
+    /*
+    Set revoPoolManager Address & Interface
+    */
+    function setNftBoostEnable(bool _enable) public onlyOwner {
+        nftBoostEnabled = _enable;
+    }
+    
+    /*
     Enable or disable cake v2 pool Balance
     */
-    function setPoolBalanceEnable(bool _enable) public onlyOwner{
-        poolBalanceEnabled = _enable;
+    function setLiquidityBalanceEnable(bool _enable) public onlyOwner{
+        liquidityBalanceEnabled = _enable;
+    }
+    
+    /*
+    Enable or disable staking pools Balance
+    */
+    function setStakingBalanceEnable(bool _enable) public onlyOwner{
+        stakingBalanceEnabled = _enable;
+    }
+    
+    /*
+    Set maxime tier index to be eligible for tier boost
+    */
+    function setMaxTierIndexBoost(uint256 _index) public onlyOwner{
+        maxTierIndexBoost = _index;
+    }
+    
+    /*
+    UTILS
+    */
+    function getTokensFromLiquidity(uint256 _lpTokensAmount, bool _isRevo) public view returns(uint256){
+        uint256 revoPoolTokens;
+        uint256 bnbPoolTokens;
+        (revoPoolTokens, bnbPoolTokens) = revoLib.getLiquidityValue(_lpTokensAmount);
+        
+        return _isRevo ? revoPoolTokens : bnbPoolTokens;
     }
 }
