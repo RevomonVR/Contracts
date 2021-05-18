@@ -11,11 +11,12 @@ interface IRevoTokenContract{
 
 interface IRevoTierContract{
     function getRealTimeTier(address _wallet) external view returns (Tier memory);
-    function tiers() external view returns (Tier[6] memory);
+    function getTier(uint256 _index) external view returns(Tier memory);
     
     struct Tier {
         uint256 index;
         uint256 minRevoToHold;
+        uint256 stakingAPRBonus;
         string name;
     }
 }
@@ -31,6 +32,18 @@ library SafeMath {
 
     function mul(uint x, uint y) internal pure returns (uint z) {
         require(y == 0 || (z = x * y) / y == x, 'ds-math-mul-overflow');
+    }
+    
+    function div(uint256 a, uint256 b) internal pure returns (uint256) {
+        return div(a, b, "SafeMath: division by zero");
+    }
+
+    function div(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+        require(b > 0, errorMessage);
+        uint256 c = a / b;
+        // assert(a == b * c + a % b); // There is no case in which this doesn't hold
+
+        return c;
     }
 }
 
@@ -84,14 +97,16 @@ contract Ownable is Context {
 
 contract RevoStaking is Ownable{
     using SafeMath for uint256;
+    uint256 SECONDS_IN_YEAR = 31104000;
     
     struct Pool {
         string poolName;
         uint256 startTime;
         uint256 initialBalance;
-        uint256 staked;
+        uint256 totalStaked;
+        uint256 totalReward;
         uint256 duration;
-        uint256 percentage;
+        uint256 APR;
         bool terminated;
         mapping(address => Stake) stakes;
     }
@@ -100,6 +115,9 @@ contract RevoStaking is Ownable{
         uint256 stakedAmount;
         uint256 startTime;
         uint256 poolIndex;
+        uint256 tierIndex;
+        uint256 reward;
+        uint256 harvested;
         bool withdrawStake;
     }
     
@@ -112,28 +130,33 @@ contract RevoStaking is Ownable{
     //Pools
     mapping (uint => Pool) public pools;
     uint public poolIndex;
+    //Reward precision
+    uint256 public rewardPrecision = 100000000000000;
     
     //EVENTS
     event StakeEvent(uint256 revoAmount, address wallet);
 
     //MODIFIERS
     modifier stakeProtection(uint256 _poolIndex, uint256 _revoAmount) {
+        //TIERS 
+        IRevoTierContract.Tier memory userTier = revoTier.getRealTimeTier(msg.sender);
+
         //Stake not done
         require(pools[_poolIndex].stakes[msg.sender].stakedAmount == 0, "Stake already done");
         
-        IRevoTierContract.Tier memory userTier = revoTier.getRealTimeTier(msg.sender);
-        IRevoTierContract.Tier[6] memory tiers = revoTier.tiers();
+        //Pool not terminated
+        require(!pools[_poolIndex].terminated, "Pool closed");
         
         //User must belong to at least the first tier
         require(userTier.minRevoToHold > 0, "User must belong to a tier");
         
         //Minimum amount >= minRevoToHold of the tier && Maximum amount < minRevoToHold of the tier + 1 
         if(userTier.index < 5){
-            require(_revoAmount >= userTier.minRevoToHold && _revoAmount < tiers[userTier.index + 1].minRevoToHold, "Amount to stake must be in tier range");
+            require(_revoAmount >= userTier.minRevoToHold && _revoAmount < revoTier.getTier(userTier.index + 1).minRevoToHold, "Amount to stake must be in tier range");
         }else{
             //No max amount for the last tier
             require(_revoAmount >= userTier.minRevoToHold, "Amount to stake must be in tier range");
-        }(t)
+        }
         _;
     }
     
@@ -141,9 +164,9 @@ contract RevoStaking is Ownable{
         setRevo(_revoAddress);
         setRevoTier(_revoTier);
         
-        createPool("Pool 1", 1000000000000000000000000, 2678400, 2123);
-        createPool("Pool 2", 10000000000000000000000001, 8035200, 10192);
-        createPool("Pool 3", 1000000000000000000000000, 16070400, 25479);
+        createPool("Pool 1", 1000000000000000000000000, 2592000, 80);
+        createPool("Pool 2", 1000000000000000000000000, 7776000, 110);
+        createPool("Pool 3", 1000000000000000000000000, 15552000, 150);
     }
     
     /****************************
@@ -153,19 +176,20 @@ contract RevoStaking is Ownable{
     /*
     Add a new pool to a new incremented index
     */
-    function createPool(string memory _name, uint256 _balance, uint256 _duration, uint256 _percentage) public onlyOwner {
-        updatePool(poolIndex, _name, _balance, _duration, _percentage);
+    function createPool(string memory _name, uint256 _balance, uint256 _duration, uint256 _apr) public onlyOwner {
+        updatePool(poolIndex, _name, _balance, _duration, _apr);
         poolIndex++;
     }
     
     /*
     Update a pool to specific index
     */
-    function updatePool(uint256 _index, string memory _name, uint256 _balance, uint256 _duration, uint256 _percentage) public onlyOwner {
+    function updatePool(uint256 _index, string memory _name, uint256 _balance, uint256 _duration, uint256 _apr) public onlyOwner {
         pools[_index].poolName = _name;
-        pools[_index].initialBalance = _balance;
+        pools[_index].startTime = block.timestamp;
+        pools[_index].initialBalance = _balance; //TODO TRANSFER
         pools[_index].duration = _duration;
-        pools[_index].percentage = _percentage;
+        pools[_index].APR = _apr;
     }
     
     /*
@@ -176,22 +200,140 @@ contract RevoStaking is Ownable{
     }
     
     /****************************
-            STAKE functions
+            STAKING functions
     *****************************/
     
-    function stake(uint256 _poolIndex, uint256 _revoAmount) public stakeProtection(_poolIndex, _revoAmount) {
+    /*
+    Stake Revo based on Tier
+    */
+    function performStake(uint256 _poolIndex, uint256 _revoAmount) public stakeProtection(_poolIndex, _revoAmount) {
+        Stake storage stake = pools[_poolIndex].stakes[msg.sender];
+        
+        //Update user & pool rewards
+        stake.reward = getUserPoolReward(_poolIndex, _revoAmount, msg.sender);
+        pools[_poolIndex].totalReward = pools[_poolIndex].totalReward.add(stake.reward);
+        
+        //Check if there are enough reward to reward user
+        require(stake.reward <= getRevoLeftForPool(_poolIndex), "No Revo left");
+        
+        //Update total staked
+        pools[_poolIndex].totalStaked = pools[_poolIndex].totalStaked.add(_revoAmount);
+        
+        //Update user stake
+        stake.stakedAmount = _revoAmount;
+        stake.startTime = block.timestamp;
+        stake.poolIndex = _poolIndex;
+        stake.tierIndex = revoTier.getRealTimeTier(msg.sender).index;
+        
+        //Transfer REVO
         revoToken.transferFrom(msg.sender, address(this), _revoAmount);
-        
-        pools[_poolIndex].stakes[msg.sender].stakedAmount = _revoAmount;
-        pools[_poolIndex].stakes[msg.sender].startTime = block.timestamp;
-        pools[_poolIndex].stakes[msg.sender].poolIndex = _poolIndex;
-        
         
         emit StakeEvent(_revoAmount, msg.sender);
     }
     
+     /*
+    Unstake Revo & harvestable
+    */
+    function unstake(uint256 _poolIndex) public {
+        Stake storage stake = pools[_poolIndex].stakes[msg.sender];
+        
+        uint256 endTime = stake.startTime.add(pools[_poolIndex].duration);
+        require(block.timestamp >= endTime, "Stake period not finished");
+        
+        uint256 harvestable = getHarvestable(msg.sender, _poolIndex);
+        revoToken.transfer(msg.sender, stake.stakedAmount.add(harvestable));
+        
+        stake.harvested = getHarvest(msg.sender, _poolIndex);
+        
+        stake.withdrawStake = true;
+    }
+    
     
     /*
+    Harvest Revo reward linearly
+    */
+    function harvest(uint256 _poolIndex) public {
+        Stake storage stake = pools[_poolIndex].stakes[msg.sender];
+        
+        //Not already unstake
+        require(!stake.withdrawStake, "Revo already unstaked");
+        
+        //Transfer harvestable 
+        revoToken.transfer(msg.sender, getHarvestable(msg.sender, _poolIndex));
+        
+        //Update harvested
+        stake.harvested = getHarvest(msg.sender, _poolIndex);
+    }
+    
+    /*
+    Get Revo reward global harvest
+    */
+    function getHarvest(address _wallet, uint256 _poolIndex) public view returns(uint256){
+        Stake storage stake = pools[_poolIndex].stakes[_wallet];
+        //End time stake
+        uint256 endTime = stake.startTime.add(pools[_poolIndex].duration);
+        
+        uint256 percentHarvestable = 100;//100%
+        if(block.timestamp < endTime){
+            uint256 remainingTime = endTime.sub(block.timestamp);
+            
+            percentHarvestable = 100 - remainingTime.mul(100).div(pools[_poolIndex].duration);
+        }
+        
+        return calculatePercentage(stake.reward, percentHarvestable);
+    }
+    
+    /*
+    Get Revo harvestable
+    */
+    function getHarvestable(address _wallet, uint256 _poolIndex) public view returns(uint256){
+        return getHarvest(_wallet, _poolIndex).sub(pools[_poolIndex].stakes[_wallet].harvested);
+    }
+    
+    //TODO IN REVOLIB
+    function calculatePercentage(uint256 amount, uint256 percentage) public view returns(uint256){
+        return amount.mul(rewardPrecision).mul(percentage).div(100).div(rewardPrecision);
+    }
+    
+    /*
+    uint256 stakedAmount;
+        uint256 startTime;
+        uint256 poolIndex;
+        uint256 tierIndex;
+        uint256 reward;
+        bool withdrawStake;
+    */
+
+    /*
+    Return the user reward for a specific pool & for a specific amount
+    */
+    function getUserPoolReward(uint256 _poolIndex, uint256 _stakeAmount, address _wallet) public view returns(uint256){
+        IRevoTierContract.Tier memory userTier = revoTier.getRealTimeTier(_wallet);
+        
+        uint256 userPercentage = getPoolPercentage(_poolIndex, userTier.index);
+        
+        uint256 reward = _stakeAmount.div(100).mul(userPercentage).div(rewardPrecision);
+        
+        return reward;
+    }
+
+    /*
+    Return pool percentage * rewardPrecision
+    */
+    function getPoolPercentage(uint256 _poolIndex, uint256 _tierIndex) public view returns(uint256){
+        uint256 APR = pools[_poolIndex].APR.add(revoTier.getTier(_tierIndex).stakingAPRBonus);
+        
+        return APR.mul(rewardPrecision).div(SECONDS_IN_YEAR).mul(pools[_poolIndex].duration);
+    }
+    
+    /*
+    Return Revo left for reward
+    */
+    function getRevoLeftForPool(uint256 _poolIndex) public view returns(uint256){
+        return pools[_poolIndex].initialBalance.sub(pools[_poolIndex].totalReward);
+    }
+    
+     /*
     Set revo Address & token
     */
     function setRevo(address _revo) public onlyOwner {
@@ -221,7 +363,7 @@ contract RevoStaking is Ownable{
         for(uint256 i = 0; i < poolIndex; i++){
             Stake memory s = pools[i].stakes[_user];
             if(s.stakedAmount > 0){
-                stakes[index] = Stake(s.stakedAmount, s.startTime, s.poolIndex, s.withdrawStake);
+                stakes[index] = Stake(s.stakedAmount, s.startTime, s.poolIndex, s.tierIndex, s.reward, s.harvested, s.withdrawStake);
                 index++;
             }
         }
@@ -232,12 +374,4 @@ contract RevoStaking is Ownable{
     function getUserStake(uint256 _poolIndex, address _user) public view returns(Stake memory){
         return pools[_poolIndex].stakes[_user];
     }
-    
-     /*
-    Update staking info
-    */
-    /*function updateStaking(uint256 _index, uint256 _duration, uint256 _percentage) public onlyOwner{
-        staking[_index].duration = _duration;
-        staking[_index].percentage = _percentage;
-    }*/
 }

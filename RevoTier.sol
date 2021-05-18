@@ -90,6 +90,7 @@ contract RevoTier is Ownable{
     struct Tier {
         uint256 index;
         uint256 minRevoToHold;
+        uint256 stakingAPRBonus;
         string name;
     }
     
@@ -128,12 +129,12 @@ contract RevoTier is Ownable{
         setMaxTierIndexBoost(3);
         
         //Tiers
-        setTiers(0, 1000000000000000000000, "Trainee");
-        setTiers(1, 2500000000000000000000, "Tamer");
-        setTiers(2, 5000000000000000000000, "Ranger");
-        setTiers(3, 10000000000000000000000, "Veteran");
-        setTiers(4, 25000000000000000000000, "Elite");
-        setTiers(5, 100000000000000000000000, "Master");
+        setTier(0, 1000000000000000000000, 0,  "Trainee");
+        setTier(1, 2500000000000000000000, 25, "Tamer");
+        setTier(2, 5000000000000000000000, 50, "Ranger");
+        setTier(3, 10000000000000000000000, 60, "Veteran");
+        setTier(4, 25000000000000000000000, 70, "Elite");
+        setTier(5, 100000000000000000000000, 80, "Master");
     }
     
     
@@ -143,14 +144,12 @@ contract RevoTier is Ownable{
         //Get Revo from Cake V2 Pool & Farming pools 
         if(liquidityBalanceEnabled){
             //Get LP tokens from wallet balance & farming pools
-            uint256 lpTokens = revoLib.getLpTokens(_wallet).add(revoPoolManager.getLPStakedFromFarmingPools(_wallet));
-
-            balance = balance.add(getTokensFromLiquidity(lpTokens, true));
+            balance = balance.add(getTokensFromLiquidity(msg.sender, true));
         }
         
         //Get Revo from staking pools
         if(stakingBalanceEnabled){
-            balance = balance.add(revoPoolManager.getRevoStakedFromStakingPools(_wallet));
+            balance = balance.add(getTokensFromStaking(msg.sender));
         }
         
         uint256 tierIndex = 9999;
@@ -165,12 +164,13 @@ contract RevoTier is Ownable{
             tierIndex = tierIndex.add(1);
         }
         
-        return tierIndex < 9999 ? tiers[tierIndex] : Tier(99, 0, "");
+        return tierIndex < 9999 ? tiers[tierIndex] : Tier(99, 0, 0, "");
     }
     
-    function setTiers(uint256 _tierIndex, uint256 _minRevo, string memory _name) public onlyOwner{
+    function setTier(uint256 _tierIndex, uint256 _minRevo, uint256 _stakingAPRBonus, string memory _name) public onlyOwner{
         tiers[_tierIndex].index = _tierIndex;
         tiers[_tierIndex].minRevoToHold = _minRevo;
+        tiers[_tierIndex].stakingAPRBonus = _stakingAPRBonus;
         tiers[_tierIndex].name = _name;
     }
     
@@ -226,14 +226,26 @@ contract RevoTier is Ownable{
         maxTierIndexBoost = _index;
     }
     
+    function getTier(uint256 _index) public view returns(Tier memory){
+        return tiers[_index];
+    }
+    
     /*
     UTILS
     */
-    function getTokensFromLiquidity(uint256 _lpTokensAmount, bool _isRevo) public view returns(uint256){
+    function getTokensFromLiquidity(address _wallet, bool _isRevo) public view returns(uint256){
         uint256 revoPoolTokens;
         uint256 bnbPoolTokens;
-        (revoPoolTokens, bnbPoolTokens) = revoLib.getLiquidityValue(_lpTokensAmount);
+        
+        uint256 lpTokensAmount = revoLib.getLpTokens(_wallet).add(revoPoolManager.getLPStakedFromFarmingPools(_wallet));
+        
+        (revoPoolTokens, bnbPoolTokens) = revoLib.getLiquidityValue(lpTokensAmount);
         
         return _isRevo ? revoPoolTokens : bnbPoolTokens;
     }
+    
+    function getTokensFromStaking(address _wallet) public view returns(uint256){
+        return revoPoolManager.getRevoStakedFromStakingPools(_wallet);
+    }
+    
 }
