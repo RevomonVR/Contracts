@@ -12,7 +12,8 @@ interface IRevoTokenContract{
 interface IRevoLib{
   function getLiquidityValue(uint256 liquidityAmount) external view returns (uint256 tokenRevoAmount, uint256 tokenBnbAmount);
   function getLpTokens(address _wallet) external view returns (uint256);
-  function tokenRevoAddress() external returns (address);
+  function tokenRevoAddress() external view returns (address);
+  function calculatePercentage(uint256 _amount, uint256 _percentage, uint256 _precision) external view returns (uint256);
 }
 
 interface IRevoPoolManagerContract{
@@ -144,12 +145,12 @@ contract RevoTier is Ownable{
         //Get Revo from Cake V2 Pool & Farming pools 
         if(liquidityBalanceEnabled){
             //Get LP tokens from wallet balance & farming pools
-            balance = balance.add(getTokensFromLiquidity(msg.sender, true));
+            balance = balance.add(getTokensFromLiquidity(_wallet, true));
         }
         
         //Get Revo from staking pools
         if(stakingBalanceEnabled){
-            balance = balance.add(getTokensFromStaking(msg.sender));
+            balance = balance.add(getTokensFromStaking(_wallet));
         }
         
         uint256 tierIndex = 9999;

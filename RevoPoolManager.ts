@@ -9,6 +9,20 @@ interface IRevoTokenContract{
   function approve(address spender, uint256 amount) external returns (bool);
 }
 
+interface IRevoStakingContract{
+    struct Stake {
+        uint256 stakedAmount;
+        uint256 startTime;
+        uint256 poolIndex;
+        uint256 tierIndex;
+        uint256 reward;
+        uint256 harvested;
+        bool withdrawStake;
+    }
+    
+    function getUserStakes(address _user) external view returns (Stake[] memory);
+}
+
 library SafeMath {
     function add(uint x, uint y) internal pure returns (uint z) {
         require((z = x + y) >= x, 'ds-math-add-overflow');
@@ -70,8 +84,6 @@ contract Ownable is Context {
     }
 }
 
-
-
 contract RevoPoolManager is Ownable{
     using SafeMath for uint256;
     
@@ -88,14 +100,16 @@ contract RevoPoolManager is Ownable{
     }
     
     /*
-    Returns the amount of Revo staked from all staking pools
+    Returns the amount of Revo staked from all staking pools accross all contracts
     */
     function getRevoStakedFromStakingPools(address _wallet) public view returns(uint256) {
         uint256 revoStaked;
         for(uint256 i = 0; i < stakingPools.length; i++){
             if(stakingPools[i] != 0x0000000000000000000000000000000000000000){
-                // TODO
-                //revoStaked = revoStaked.add()
+                IRevoStakingContract.Stake[] memory stakes = IRevoStakingContract(stakingPools[i]).getUserStakes(_wallet);
+                for(uint256 s = 0; s < stakes.length; s++){ 
+                    revoStaked = revoStaked.add(stakes[i].stakedAmount);
+                }
             }
         }
         return revoStaked;

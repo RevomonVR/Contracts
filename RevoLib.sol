@@ -66,6 +66,18 @@ library SafeMath {
     function mul(uint x, uint y) internal pure returns (uint z) {
         require(y == 0 || (z = x * y) / y == x, 'ds-math-mul-overflow');
     }
+    
+    function div(uint256 a, uint256 b) internal pure returns (uint256) {
+        return div(a, b, "SafeMath: division by zero");
+    }
+
+    function div(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+        require(b > 0, errorMessage);
+        uint256 c = a / b;
+        // assert(a == b * c + a % b); // There is no case in which this doesn't hold
+
+        return c;
+    }
 }
 
 
@@ -331,14 +343,14 @@ contract RevoLib is Ownable{
     address public tokenRevoAddress;
     address public tokenBnbAddress;
     
-    constructor(/*address _pancakePair, address _factory, address _revo, address _bnb*/) public {
-        /*setFactory(_factory);
+    constructor(address _pancakePair, address _factory, address _revo, address _bnb) public {
+        setFactory(_factory);
         setCakeV2Pair(_pancakePair);
-        setTokens(_revo, _bnb);*/
+        setTokens(_revo, _bnb);
         
-        setFactory(0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73);
+        /*setFactory(0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73);
         setCakeV2Pair(0x388b28c75A3547C9eeFf7279de4FE2a0ed5bE1b3);
-        setTokens(0x155040625D7ae3e9caDA9a73E3E44f76D3Ed1409, 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c);
+        setTokens(0x155040625D7ae3e9caDA9a73E3E44f76D3Ed1409, 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c);*/
     }
     
     /*
@@ -385,5 +397,12 @@ contract RevoLib is Ownable{
     function setTokens(address _revo, address _bnb) public onlyOwner {
         tokenRevoAddress = _revo;
         tokenBnbAddress = _bnb;
+    }
+    
+    /*
+    Calculate percentage
+    */
+    function calculatePercentage(uint256 _amount, uint256 _percentage, uint256 _precision) public view returns(uint256){
+        return _amount.mul(_precision).mul(_percentage).div(100).div(_precision);
     }
 }
