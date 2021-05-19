@@ -145,6 +145,8 @@ contract RevoStaking is Ownable{
     
     //EVENTS
     event StakeEvent(uint256 revoAmount, address wallet);
+    event HarvestEvent(uint256 revoAmount, address wallet);
+    event UnstakeEvent(uint256 revoStakeAmount, uint256 revoHarvestAmount, address wallet);
 
     //MODIFIERS
     modifier stakeProtection(uint256 _poolIndex, uint256 _revoAmount) {
@@ -262,6 +264,8 @@ contract RevoStaking is Ownable{
         uint256 harvestable = getHarvestable(msg.sender, _poolIndex);
         revoToken.transfer(msg.sender, stake.stakedAmount.add(harvestable));
         
+        emit UnstakeEvent(stake.stakedAmount, harvestable, msg.sender);
+        
         stake.harvested = getHarvest(msg.sender, _poolIndex);
         stake.stakedAmount = 0;
     }
@@ -276,10 +280,13 @@ contract RevoStaking is Ownable{
         require(!stake.withdrawStake, "Revo already unstaked");
         
         //Transfer harvestable 
-        revoToken.transfer(msg.sender, getHarvestable(msg.sender, _poolIndex));
+        uint256 havestable = getHarvestable(msg.sender, _poolIndex);
+        revoToken.transfer(msg.sender, havestable);
         
         //Update harvested
         stake.harvested = getHarvest(msg.sender, _poolIndex);
+        
+        emit HarvestEvent(havestable, msg.sender);
     }
     
     /*
