@@ -402,7 +402,7 @@ contract RevoLib is Ownable{
     /*
     Calculate percentage
     */
-    function calculatePercentage(uint256 _amount, uint256 _percentage, uint256 _precision) public view returns(uint256){
-        return _amount.mul(_precision).mul(_percentage).div(100).div(_precision);
+    function calculatePercentage(uint256 _amount, uint256 _percentage, uint256 _precision, uint256 _percentPrecision) public view returns(uint256){
+        return _amount.mul(_precision).mul(_percentage).div(_percentPrecision).div(_precision);
     }
 }

@@ -231,6 +231,14 @@ contract RevoTier is Ownable{
         return tiers[_index];
     }
     
+    function getTiers() public view returns(Tier[] memory){
+        Tier[] memory tiersToReturn = new Tier[](6);
+        for(uint256 i = 0; i < tiers.length; i++){
+            tiersToReturn[i] = tiers[i];
+        }
+        return tiersToReturn;
+    }
+    
     /*
     UTILS
     */

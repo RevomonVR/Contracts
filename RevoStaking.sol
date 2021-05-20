@@ -25,7 +25,7 @@ interface IRevoLib{
   function getLiquidityValue(uint256 liquidityAmount) external view returns (uint256 tokenRevoAmount, uint256 tokenBnbAmount);
   function getLpTokens(address _wallet) external view returns (uint256);
   function tokenRevoAddress() external view returns (address);
-  function calculatePercentage(uint256 _amount, uint256 _percentage, uint256 _precision) external view returns (uint256);
+  function calculatePercentage(uint256 _amount, uint256 _percentage, uint256 _precision, uint256 _percentPrecision) external view returns (uint256);
 }
 
 library SafeMath {
@@ -108,14 +108,14 @@ contract RevoStaking is Ownable{
     
     struct Pool {
         string poolName;
+        uint256 poolIndex;
         uint256 startTime;
-        uint256 initialBalance;
-        uint256 totalStaked;
         uint256 totalReward;
+        uint256 totalStaked;
+        uint256 currentReward;
         uint256 duration;
         uint256 APR;
         bool terminated;
-        mapping(address => Stake) stakes;
     }
     
     struct Stake {
@@ -139,6 +139,7 @@ contract RevoStaking is Ownable{
     IRevoLib revoLib;
     //Pools
     mapping (uint => Pool) public pools;
+    mapping(uint256 => mapping(address => Stake)) stakes;
     uint public poolIndex;
     //Reward precision
     uint256 public rewardPrecision = 100000000000000;
@@ -154,7 +155,7 @@ contract RevoStaking is Ownable{
         IRevoTierContract.Tier memory userTier = revoTier.getRealTimeTier(msg.sender);
 
         //Stake not done
-        require(pools[_poolIndex].stakes[msg.sender].stakedAmount == 0, "Stake already done");
+        require(stakes[_poolIndex][msg.sender].stakedAmount == 0, "Stake already done");
         
         //Pool not terminated
         require(!pools[_poolIndex].terminated, "Pool closed");
@@ -178,9 +179,9 @@ contract RevoStaking is Ownable{
         setRevoTier(_revoTier);
         
         //TODO REMOVE
-        createPool("Pool 1", 1000000000000000000000000, 2592000, 80, false);
+        createPool("Pool 3", 1000000000000000000000000, 2592000, 150, false);
         createPool("Pool 2", 1000000000000000000000000, 7776000, 110, false);
-        createPool("Pool 3", 1000000000000000000000000, 15552000, 150, false);
+        createPool("Pool 1", 1000000000000000000000000, 2592000, 80, false);
     }
     
     /****************************
@@ -203,8 +204,9 @@ contract RevoStaking is Ownable{
     */
     function updatePool(uint256 _index, string memory _name, uint256 _balance, uint256 _duration, uint256 _apr) public onlyOwner {
         pools[_index].poolName = _name;
+        pools[_index].poolIndex = _index;
         pools[_index].startTime = block.timestamp;
-        pools[_index].initialBalance = _balance;
+        pools[_index].totalReward = _balance;
         pools[_index].duration = _duration;
         pools[_index].APR = _apr;
     }
@@ -224,11 +226,11 @@ contract RevoStaking is Ownable{
     Stake Revo based on Tier
     */
     function performStake(uint256 _poolIndex, uint256 _revoAmount) public stakeProtection(_poolIndex, _revoAmount) {
-        Stake storage stake = pools[_poolIndex].stakes[msg.sender];
+        Stake storage stake = stakes[_poolIndex][msg.sender];
         
         //Update user & pool rewards
         stake.reward = getUserPoolReward(_poolIndex, _revoAmount, msg.sender);
-        pools[_poolIndex].totalReward = pools[_poolIndex].totalReward.add(stake.reward);
+        pools[_poolIndex].currentReward = pools[_poolIndex].currentReward.add(stake.reward);
         
         //Check if there are enough reward to reward user
         require(stake.reward <= getRevoLeftForPool(_poolIndex), "No Revo left");
@@ -252,7 +254,7 @@ contract RevoStaking is Ownable{
     Unstake Revo & harvestable
     */
     function unstake(uint256 _poolIndex) public {
-        Stake storage stake = pools[_poolIndex].stakes[msg.sender];
+        Stake storage stake = stakes[_poolIndex][msg.sender];
         
         uint256 endTime = stake.startTime.add(pools[_poolIndex].duration);
         require(block.timestamp >= endTime, "Stake period not finished");
@@ -274,7 +276,7 @@ contract RevoStaking is Ownable{
     Harvest Revo reward linearly
     */
     function harvest(uint256 _poolIndex) public {
-        Stake storage stake = pools[_poolIndex].stakes[msg.sender];
+        Stake storage stake = stakes[_poolIndex][msg.sender];
         
         //Not already unstake
         require(!stake.withdrawStake, "Revo already unstaked");
@@ -293,25 +295,27 @@ contract RevoStaking is Ownable{
     Get Revo reward global harvest
     */
     function getHarvest(address _wallet, uint256 _poolIndex) public view returns(uint256){
-        Stake storage stake = pools[_poolIndex].stakes[_wallet];
+        uint256 percentPrecision = 100000000000;
+        Stake storage stake = stakes[_poolIndex][_wallet];
         //End time stake
         uint256 endTime = stake.startTime.add(pools[_poolIndex].duration);
         
-        uint256 percentHarvestable = 100;//100%
+        uint256 percentHarvestable = percentPrecision;//100%
         if(block.timestamp < endTime){
             uint256 remainingTime = endTime.sub(block.timestamp);
             
-            percentHarvestable = 100 - remainingTime.mul(100).div(pools[_poolIndex].duration);
+            percentHarvestable = percentPrecision - remainingTime.mul(percentPrecision).div(pools[_poolIndex].duration);
         }
         
-        return revoLib.calculatePercentage(stake.reward, percentHarvestable, rewardPrecision);
+        return revoLib.calculatePercentage(stake.reward, percentHarvestable, rewardPrecision, percentPrecision);
     }
+    
     
     /*
     Get Revo harvestable
     */
     function getHarvestable(address _wallet, uint256 _poolIndex) public view returns(uint256){
-        return getHarvest(_wallet, _poolIndex).sub(pools[_poolIndex].stakes[_wallet].harvested);
+        return getHarvest(_wallet, _poolIndex).sub(stakes[_poolIndex][_wallet].harvested);
     }
     
 
@@ -341,7 +345,7 @@ contract RevoStaking is Ownable{
     Return Revo left for reward
     */
     function getRevoLeftForPool(uint256 _poolIndex) public view returns(uint256){
-        return pools[_poolIndex].initialBalance.sub(pools[_poolIndex].totalReward);
+        return pools[_poolIndex].totalReward.sub(pools[_poolIndex].currentReward);
     }
     
      /*
@@ -374,23 +378,32 @@ contract RevoStaking is Ownable{
     function getUserStakes(address _user) public view returns(Stake[] memory){
         uint256 count;
         for(uint256 i = 0; i < poolIndex; i++){
-            if(pools[i].stakes[_user].stakedAmount > 0){ count++;}
+            if(stakes[i][_user].stakedAmount > 0){ count++;}
         }
         
-        Stake[] memory stakes = new Stake[](count);
+        Stake[] memory stakesToReturn = new Stake[](count);
         uint index;
         for(uint256 i = 0; i < poolIndex; i++){
-            Stake memory s = pools[i].stakes[_user];
+            Stake memory s = stakes[i][_user];
             if(s.stakedAmount > 0){
-                stakes[index] = Stake(s.stakedAmount, s.startTime, s.poolIndex, s.tierIndex, s.reward, s.harvested, s.withdrawStake);
+                stakesToReturn[index] = Stake(s.stakedAmount, s.startTime, s.poolIndex, s.tierIndex, s.reward, s.harvested, s.withdrawStake);
                 index++;
             }
         }
         
-        return stakes;
+        return stakesToReturn;
+    }
+    
+    function getAllPools() public view returns(Pool[] memory){
+        Pool[] memory poolsToReturn = new Pool[](poolIndex);
+        for(uint256 i = 0; i < poolIndex; i++){
+            poolsToReturn[i] = pools[i];
+        }
+        
+        return poolsToReturn;
     }
     
     function getUserStake(uint256 _poolIndex, address _user) public view returns(Stake memory){
-        return pools[_poolIndex].stakes[_user];
+        return stakes[_poolIndex][_user];
     }
 }

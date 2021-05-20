@@ -20,7 +20,25 @@ interface IRevoStakingContract{
         bool withdrawStake;
     }
     
+    struct Pool {
+        string poolName;
+        uint256 poolIndex;
+        uint256 startTime;
+        uint256 totalReward;
+        uint256 totalStaked;
+        uint256 currentReward;
+        uint256 duration;
+        uint256 APR;
+        bool terminated;
+    }
+    
     function getUserStakes(address _user) external view returns (Stake[] memory);
+    function getAllPools() external view returns(IRevoStakingContract.Pool[] memory);
+    function stake(uint256 _poolIndex, uint256 _revoAmount) external;
+    function unstake(uint256 _poolIndex) external;
+    function harvest(uint256 _poolIndex) external;
+    function getUserPoolReward(uint256 _poolIndex, uint256 _stakeAmount, address _wallet) external view returns(uint256);
+    function getHarvestable(address _wallet, uint256 _poolIndex) external view returns(uint256);
 }
 
 library SafeMath {
@@ -87,6 +105,11 @@ contract Ownable is Context {
 contract RevoPoolManager is Ownable{
     using SafeMath for uint256;
     
+    struct AbsctractPool {
+        address contractAddress;
+        IRevoStakingContract.Pool pool;
+    }
+    
     //Revo Token
     address public revoAddress;
     IRevoTokenContract revoToken;
@@ -150,6 +173,87 @@ contract RevoPoolManager is Ownable{
         if(index < 99999999){
             delete addresses[index];
         }
+    }
+    
+    /**********************
+     * Staking Proxy
+     *********************/
+    
+    /*
+    Get all staking pools accross all staking contracts
+    */
+    function getStakingPools() public view returns(AbsctractPool[] memory){
+        uint256 size = 0;
+        for(uint256 i = 0; i < stakingPools.length; i++){
+            if(stakingPools[i] != 0x0000000000000000000000000000000000000000){
+                size += IRevoStakingContract(stakingPools[uint(i)]).getAllPools().length;
+            }
+        }
+        AbsctractPool[] memory pools = new AbsctractPool[](size);
+        
+        uint256 arrayIndex;
+        for(int256 i = int(stakingPools.length) - 1; i >= 0; i--){
+            if(stakingPools[uint(i)] != 0x0000000000000000000000000000000000000000){
+                IRevoStakingContract stakingContract = IRevoStakingContract(stakingPools[uint(i)]);
+                
+                for(int256 p = int(stakingContract.getAllPools().length) - 1; p >= 0 ; p--){
+                    pools[arrayIndex].contractAddress = stakingPools[uint(i)];
+                    pools[arrayIndex].pool = stakingContract.getAllPools()[uint(p)];
+                    
+                    arrayIndex++;
+                }
+            }
+        }
+        return pools;
+    }
+    
+    function getUserStakes(address _user) external view returns (IRevoStakingContract.Stake[] memory){
+        uint256 size = 0;
+        for(uint256 i = 0; i < stakingPools.length; i++){
+            if(stakingPools[i] != 0x0000000000000000000000000000000000000000){
+                size += IRevoStakingContract(stakingPools[uint(i)]).getUserStakes(_user).length;
+            }
+        }
+        
+        IRevoStakingContract.Stake[] memory stakes = new IRevoStakingContract.Stake[](size);
+        
+        uint256 arrayIndex;
+        for(int256 i = int(stakingPools.length) - 1; i >= 0; i--){
+            if(stakingPools[uint(i)] != 0x0000000000000000000000000000000000000000){
+                IRevoStakingContract stakingContract = IRevoStakingContract(stakingPools[uint(i)]);
+                
+                for(int256 p = int(stakingContract.getUserStakes(_user).length) - 1; p >= 0 ; p--){
+                    stakes[arrayIndex] = stakingContract.getUserStakes(_user)[uint(p)];
+                    
+                    arrayIndex++;
+                }
+            }
+        }
+        return stakes;
+    }
+    
+    function stake(address contractAddress, uint256 _poolIndex, uint256 _revoAmount) public{ 
+        IRevoStakingContract(contractAddress).stake(_poolIndex, _revoAmount);
+    }
+    
+    function unstake(address contractAddress, uint256 _poolIndex) public{
+        IRevoStakingContract(contractAddress).unstake(_poolIndex);
+    }
+    
+    function harvest(address contractAddress, uint256 _poolIndex) public{
+        IRevoStakingContract(contractAddress).harvest(_poolIndex);
+    }
+    
+    function getUserPoolReward(address contractAddress, uint256 _poolIndex, uint256 _stakeAmount, address _wallet) external view returns(uint256){
+        return IRevoStakingContract(contractAddress).getUserPoolReward(_poolIndex, _stakeAmount,_wallet);
+    }
+    
+    function getHarvestable(address contractAddress, address _wallet, uint256[] memory _poolIndexes) public view returns(uint256[] memory){
+        uint256[] memory harvestArray = new uint256[](_poolIndexes.length);
+        for(uint256 i = 0; i < _poolIndexes.length; i++){
+            harvestArray[i] = IRevoStakingContract(contractAddress).getHarvestable(_wallet, _poolIndexes[i]);
+        }
+        return harvestArray;
     }
     
     /*
