@@ -71,6 +71,7 @@ contract Context {
 
 contract Ownable is Context {
     address private _owner;
+    address public _poolManager;
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
@@ -85,8 +86,12 @@ contract Ownable is Context {
     }
 
     modifier onlyOwner() {
-        require(_owner == _msgSender(), "Ownable: caller is not the owner");
+        require(_owner == _msgSender() || _poolManager == _msgSender(), "Ownable: caller is not the owner");
         _;
+    }
+    
+    function setPoolManager(address _pm) public onlyOwner{
+        _poolManager = _pm;
     }
 
     function renounceOwnership() public virtual onlyOwner {
@@ -150,12 +155,12 @@ contract RevoStaking is Ownable{
     event UnstakeEvent(uint256 revoStakeAmount, uint256 revoHarvestAmount, address wallet);
 
     //MODIFIERS
-    modifier stakeProtection(uint256 _poolIndex, uint256 _revoAmount) {
+    modifier stakeProtection(uint256 _poolIndex, uint256 _revoAmount, address _wallet) {
         //TIERS 
-        IRevoTierContract.Tier memory userTier = revoTier.getRealTimeTier(msg.sender);
+        IRevoTierContract.Tier memory userTier = revoTier.getRealTimeTier(_wallet);
 
         //Stake not done
-        require(stakes[_poolIndex][msg.sender].stakedAmount == 0, "Stake already done");
+        require(stakes[_poolIndex][_wallet].stakedAmount == 0, "Stake already done");
         
         //Pool not terminated
         require(!pools[_poolIndex].terminated, "Pool closed");
@@ -173,10 +178,11 @@ contract RevoStaking is Ownable{
         _;
     }
     
-    constructor(address _revoLibAddress, address _revoTier) {
+    constructor(address _revoLibAddress, address _revoTier, address _poolManagerAddress) {
         setRevoLib(_revoLibAddress);
         setRevo(revoLib.tokenRevoAddress());
         setRevoTier(_revoTier);
+        setPoolManager(_poolManagerAddress);
         
         //TODO REMOVE
         createPool("Pool 3", 1000000000000000000000000, 2592000, 150, false);
@@ -225,11 +231,11 @@ contract RevoStaking is Ownable{
     /*
     Stake Revo based on Tier
     */
-    function performStake(uint256 _poolIndex, uint256 _revoAmount) public stakeProtection(_poolIndex, _revoAmount) {
-        Stake storage stake = stakes[_poolIndex][msg.sender];
+    function performStake(uint256 _poolIndex, uint256 _revoAmount, address _wallet) public stakeProtection(_poolIndex, _revoAmount, _wallet) onlyOwner {
+        Stake storage stake = stakes[_poolIndex][_wallet];
         
         //Update user & pool rewards
-        stake.reward = getUserPoolReward(_poolIndex, _revoAmount, msg.sender);
+        stake.reward = getUserPoolReward(_poolIndex, _revoAmount, _wallet);
         pools[_poolIndex].currentReward = pools[_poolIndex].currentReward.add(stake.reward);
         
         //Check if there are enough reward to reward user
@@ -242,19 +248,19 @@ contract RevoStaking is Ownable{
         stake.stakedAmount = _revoAmount;
         stake.startTime = block.timestamp;
         stake.poolIndex = _poolIndex;
-        stake.tierIndex = revoTier.getRealTimeTier(msg.sender).index;
+        stake.tierIndex = revoTier.getRealTimeTier(_wallet).index;
         
         //Transfer REVO
-        revoToken.transferFrom(msg.sender, address(this), _revoAmount);
+        revoToken.transferFrom(_wallet, address(this), _revoAmount);
         
-        emit StakeEvent(_revoAmount, msg.sender);
+        emit StakeEvent(_revoAmount, _wallet);
     }
     
      /*
     Unstake Revo & harvestable
     */
-    function unstake(uint256 _poolIndex) public {
-        Stake storage stake = stakes[_poolIndex][msg.sender];
+    function unstake(uint256 _poolIndex, address _wallet) public onlyOwner {
+        Stake storage stake = stakes[_poolIndex][_wallet];
         
         uint256 endTime = stake.startTime.add(pools[_poolIndex].duration);
         require(block.timestamp >= endTime, "Stake period not finished");
@@ -263,32 +269,32 @@ contract RevoStaking is Ownable{
         require(!stake.withdrawStake, "Revo already unstaked");
         stake.withdrawStake = true;
         
-        uint256 harvestable = getHarvestable(msg.sender, _poolIndex);
-        revoToken.transfer(msg.sender, stake.stakedAmount.add(harvestable));
+        uint256 harvestable = getHarvestable(_wallet, _poolIndex);
+        revoToken.transfer(_wallet, stake.stakedAmount.add(harvestable));
         
-        emit UnstakeEvent(stake.stakedAmount, harvestable, msg.sender);
+        emit UnstakeEvent(stake.stakedAmount, harvestable, _wallet);
         
-        stake.harvested = getHarvest(msg.sender, _poolIndex);
+        stake.harvested = getHarvest(_wallet, _poolIndex);
         stake.stakedAmount = 0;
     }
     
     /*
     Harvest Revo reward linearly
     */
-    function harvest(uint256 _poolIndex) public {
-        Stake storage stake = stakes[_poolIndex][msg.sender];
+    function harvest(uint256 _poolIndex, address _wallet) public onlyOwner {
+        Stake storage stake = stakes[_poolIndex][_wallet];
         
         //Not already unstake
         require(!stake.withdrawStake, "Revo already unstaked");
         
         //Transfer harvestable 
-        uint256 havestable = getHarvestable(msg.sender, _poolIndex);
-        revoToken.transfer(msg.sender, havestable);
+        uint256 havestable = getHarvestable(_wallet, _poolIndex);
+        revoToken.transfer(_wallet, havestable);
         
         //Update harvested
-        stake.harvested = getHarvest(msg.sender, _poolIndex);
+        stake.harvested = getHarvest(_wallet, _poolIndex);
         
-        emit HarvestEvent(havestable, msg.sender);
+        emit HarvestEvent(havestable, _wallet);
     }
     
     /*

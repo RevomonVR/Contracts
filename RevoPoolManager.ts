@@ -34,9 +34,9 @@ interface IRevoStakingContract{
     
     function getUserStakes(address _user) external view returns (Stake[] memory);
     function getAllPools() external view returns(IRevoStakingContract.Pool[] memory);
-    function stake(uint256 _poolIndex, uint256 _revoAmount) external;
-    function unstake(uint256 _poolIndex) external;
-    function harvest(uint256 _poolIndex) external;
+    function performStake(uint256 _poolIndex, uint256 _revoAmount, address _wallet) external;
+    function unstake(uint256 _poolIndex, address _wallet) external;
+    function harvest(uint256 _poolIndex, address _wallet) external;
     function getUserPoolReward(uint256 _poolIndex, uint256 _stakeAmount, address _wallet) external view returns(uint256);
     function getHarvestable(address _wallet, uint256 _poolIndex) external view returns(uint256);
 }
@@ -207,7 +207,7 @@ contract RevoPoolManager is Ownable{
         return pools;
     }
     
-    function getUserStakes(address _user) external view returns (IRevoStakingContract.Stake[] memory){
+    function getUserStakes(address _user) public view returns (IRevoStakingContract.Stake[] memory){
         uint256 size = 0;
         for(uint256 i = 0; i < stakingPools.length; i++){
             if(stakingPools[i] != 0x0000000000000000000000000000000000000000){
@@ -232,16 +232,17 @@ contract RevoPoolManager is Ownable{
         return stakes;
     }
     
+    
     function stake(address contractAddress, uint256 _poolIndex, uint256 _revoAmount) public{ 
-        IRevoStakingContract(contractAddress).stake(_poolIndex, _revoAmount);
+        IRevoStakingContract(contractAddress).performStake(_poolIndex, _revoAmount, msg.sender);
     }
     
     function unstake(address contractAddress, uint256 _poolIndex) public{
-        IRevoStakingContract(contractAddress).unstake(_poolIndex);
+        IRevoStakingContract(contractAddress).unstake(_poolIndex, msg.sender);
     }
     
     function harvest(address contractAddress, uint256 _poolIndex) public{
-        IRevoStakingContract(contractAddress).harvest(_poolIndex);
+        IRevoStakingContract(contractAddress).harvest(_poolIndex, msg.sender);
     }
     
     function getUserPoolReward(address contractAddress, uint256 _poolIndex, uint256 _stakeAmount, address _wallet) external view returns(uint256){
