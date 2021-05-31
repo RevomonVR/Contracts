@@ -333,8 +333,6 @@ contract Ownable is Context {
     }
 }
 
-//Factory : 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73
-// Deployed contract 0x383FD38ec2921899dFfd18115668d01C5D77e0da
 contract RevoLib is Ownable{
     using SafeMath for uint256;
     address public factory;
@@ -347,10 +345,6 @@ contract RevoLib is Ownable{
         setFactory(_factory);
         setCakeV2Pair(_pancakePair);
         setTokens(_revo, _bnb);
-        
-        /*setFactory(0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73);
-        setCakeV2Pair(0x388b28c75A3547C9eeFf7279de4FE2a0ed5bE1b3);
-        setTokens(0x155040625D7ae3e9caDA9a73E3E44f76D3Ed1409, 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c);*/
     }
     
     /*

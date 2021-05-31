@@ -142,9 +142,11 @@ contract RevoStaking is Ownable{
     //Revo lib
     address public revoLibAddress;
     IRevoLib revoLib;
+    //Emergency right
+    bool public emergencyRightBurned;
     //Pools
     mapping (uint => Pool) public pools;
-    mapping(uint256 => mapping(address => Stake)) stakes;
+    mapping(uint256 => mapping(address => Stake)) public stakes;
     uint public poolIndex;
     //Reward precision
     uint256 public rewardPrecision = 100000000000000;
@@ -160,7 +162,7 @@ contract RevoStaking is Ownable{
         IRevoTierContract.Tier memory userTier = revoTier.getRealTimeTier(_wallet);
 
         //Stake not done
-        require(stakes[_poolIndex][_wallet].stakedAmount == 0, "Stake already done");
+        require(stakes[_poolIndex][_wallet].stakedAmount == 0 && !stakes[_poolIndex][_wallet].withdrawStake, "Stake already done");
         
         //Pool not terminated
         require(!pools[_poolIndex].terminated, "Pool closed");
@@ -183,11 +185,6 @@ contract RevoStaking is Ownable{
         setRevo(revoLib.tokenRevoAddress());
         setRevoTier(_revoTier);
         setPoolManager(_poolManagerAddress);
-        
-        //TODO REMOVE
-        createPool("Pool 3", 1000000000000000000000000, 2592000, 150, false);
-        createPool("Pool 2", 1000000000000000000000000, 7776000, 110, false);
-        createPool("Pool 1", 1000000000000000000000000, 2592000, 80, false);
     }
     
     /****************************
@@ -227,19 +224,25 @@ contract RevoStaking is Ownable{
     /****************************
             STAKING functions
     *****************************/
-    
+    /////////////////////TODOOOOOOOOOOOOOOOOOOOOO TODO REMOVE !!!!!!!!!!!!!!!!!!!/////////////
+    function updateStartTime(uint256 _startTime, address _wallet, uint256 _poolIndex) public {
+        stakes[_poolIndex][_wallet].startTime = _startTime;
+    }
     /*
     Stake Revo based on Tier
     */
     function performStake(uint256 _poolIndex, uint256 _revoAmount, address _wallet) public stakeProtection(_poolIndex, _revoAmount, _wallet) onlyOwner {
         Stake storage stake = stakes[_poolIndex][_wallet];
         
+        //Update user stake tier index <!> Before update stakedAmount
+        stake.tierIndex = revoTier.getRealTimeTier(_wallet).index;
+        
         //Update user & pool rewards
         stake.reward = getUserPoolReward(_poolIndex, _revoAmount, _wallet);
-        pools[_poolIndex].currentReward = pools[_poolIndex].currentReward.add(stake.reward);
-        
         //Check if there are enough reward to reward user
         require(stake.reward <= getRevoLeftForPool(_poolIndex), "No Revo left");
+        
+        pools[_poolIndex].currentReward = pools[_poolIndex].currentReward.add(stake.reward);
         
         //Update total staked
         pools[_poolIndex].totalStaked = pools[_poolIndex].totalStaked.add(_revoAmount);
@@ -248,7 +251,6 @@ contract RevoStaking is Ownable{
         stake.stakedAmount = _revoAmount;
         stake.startTime = block.timestamp;
         stake.poolIndex = _poolIndex;
-        stake.tierIndex = revoTier.getRealTimeTier(_wallet).index;
         
         //Transfer REVO
         revoToken.transferFrom(_wallet, address(this), _revoAmount);
@@ -275,7 +277,6 @@ contract RevoStaking is Ownable{
         emit UnstakeEvent(stake.stakedAmount, harvestable, _wallet);
         
         stake.harvested = getHarvest(_wallet, _poolIndex);
-        stake.stakedAmount = 0;
     }
     
     /*
@@ -354,7 +355,7 @@ contract RevoStaking is Ownable{
         return pools[_poolIndex].totalReward.sub(pools[_poolIndex].currentReward);
     }
     
-     /*
+    /*
     Set revo Address & token
     */
     function setRevo(address _revo) public onlyOwner {
@@ -377,7 +378,20 @@ contract RevoStaking is Ownable{
         revoLibAddress = _revoLib;
         revoLib = IRevoLib(revoLibAddress);
     }
+    
+    /*
+    Emergency transfer Revo
+    */
+    function withdrawRevo(uint256 _amount) public onlyOwner {
+        if(!emergencyRightBurned){
+            revoToken.transfer(owner(), _amount);
+        }
+    }
 
+    function burnEmergencyRight() public onlyOwner {
+        emergencyRightBurned = true;
+    }
+    
     /*
     Get pool indexes for user
     */

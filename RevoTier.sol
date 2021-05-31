@@ -82,8 +82,6 @@ contract Ownable is Context {
     }
 }
 
-//Factory : 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73
-// Deployed contract 0x211733993aB13A135e2BD80C381b5145185570C7
 contract RevoTier is Ownable{
     using SafeMath for uint256;
     
@@ -113,7 +111,7 @@ contract RevoTier is Ownable{
     //Boost tier + 1 
     bool public nftBoostEnabled;
     //Max Tier boost 
-    uint256 maxTierIndexBoost;
+    uint256 public maxTierIndexBoost;
     
     
     constructor(address _revoLibAddress, address _revoPoolManager) {
@@ -162,7 +160,7 @@ contract RevoTier is Ownable{
         
         if(nftBoostEnabled && tierIndex <= maxTierIndexBoost){
             //TODO 
-            tierIndex = tierIndex.add(1);
+            //tierIndex = tierIndex.add(1);
         }
         
         return tierIndex < 9999 ? tiers[tierIndex] : Tier(99, 0, 0, "");
