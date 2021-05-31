@@ -224,10 +224,6 @@ contract RevoStaking is Ownable{
     /****************************
             STAKING functions
     *****************************/
-    /////////////////////TODOOOOOOOOOOOOOOOOOOOOO TODO REMOVE !!!!!!!!!!!!!!!!!!!/////////////
-    function updateStartTime(uint256 _startTime, address _wallet, uint256 _poolIndex) public {
-        stakes[_poolIndex][_wallet].startTime = _startTime;
-    }
     /*
     Stake Revo based on Tier
     */
