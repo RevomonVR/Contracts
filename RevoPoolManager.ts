@@ -41,6 +41,41 @@ interface IRevoStakingContract{
     function getHarvestable(address _wallet, uint256 _poolIndex) external view returns(uint256);
 }
 
+interface IRevoFarming{
+    struct FarmingPool {
+        string name;
+        uint256 poolIndex;
+        uint256 startTime;
+        uint256 periodFinish;
+        uint256 rewardRate;
+        uint256 rewardsDuration;
+        uint256 lastUpdateTime;
+        uint256 rewardPerTokenStored;
+        uint256 totalLpStaked;
+    }
+    
+    struct Stake {
+        uint256 stakedAmount;
+        uint256 poolIndex;
+        uint256 harvested;
+        uint256 harvestable;
+    }
+    
+    function stake(uint256 _poolIndex, address _wallet, uint256 amount) external;
+    function withdraw(uint256 _poolIndex, address _wallet, uint256 amount) external;
+    function harvest(uint256 _poolIndex, address _wallet) external;
+    function exit(uint256 _poolIndex, address _wallet) external;
+    function earned(uint256 _poolIndex, address account) external view returns (uint256);
+    function getAllPools() external view returns(FarmingPool[] memory);
+    function lpAddress() external view returns(address);
+    function getUserStakes(address _user) external view returns(IRevoFarming.Stake[] memory);
+}
+
+interface IPancakeContract {
+    function totalSupply() external view returns (uint);
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+}
+
 library SafeMath {
     function add(uint x, uint y) internal pure returns (uint z) {
         require((z = x + y) >= x, 'ds-math-add-overflow');
@@ -110,6 +145,14 @@ contract RevoPoolManager is Ownable{
         IRevoStakingContract.Pool pool;
     }
     
+    struct AbsctractFarmingPool {
+        address contractAddress;
+        uint256 lpReserves0;
+        uint256 lpReserves1;
+        uint256 lpTotalSupply;
+        IRevoFarming.FarmingPool pool;
+    }
+    
     //Revo Token
     address public revoAddress;
     IRevoTokenContract revoToken;
@@ -145,8 +188,11 @@ contract RevoPoolManager is Ownable{
         uint256 lpStaked;
         for(uint256 i = 0; i < farmingPools.length; i++){
             if(farmingPools[i] != 0x0000000000000000000000000000000000000000){
-                // TODO
-                //lpStaked = lpStaked.add()
+
+                IRevoFarming.Stake[] memory stakes = IRevoFarming(farmingPools[i]).getUserStakes(_wallet);
+                for(uint256 s = 0; s < stakes.length; s++){ 
+                    lpStaked = lpStaked.add(stakes[s].stakedAmount);
+                }
             }
         }
         return lpStaked;
@@ -233,26 +279,107 @@ contract RevoPoolManager is Ownable{
     }
     
     
-    function stake(address contractAddress, uint256 _poolIndex, uint256 _revoAmount) public{ 
-        IRevoStakingContract(contractAddress).performStake(_poolIndex, _revoAmount, msg.sender);
+    function stake(address _contractAddress, uint256 _poolIndex, uint256 _revoAmount) public{ 
+        IRevoStakingContract(_contractAddress).performStake(_poolIndex, _revoAmount, msg.sender);
     }
     
-    function unstake(address contractAddress, uint256 _poolIndex) public{
-        IRevoStakingContract(contractAddress).unstake(_poolIndex, msg.sender);
+    function unstake(address _contractAddress, uint256 _poolIndex) public{
+        IRevoStakingContract(_contractAddress).unstake(_poolIndex, msg.sender);
     }
     
-    function harvest(address contractAddress, uint256 _poolIndex) public{
-        IRevoStakingContract(contractAddress).harvest(_poolIndex, msg.sender);
+    function harvest(address _contractAddress, uint256 _poolIndex) public{
+        IRevoStakingContract(_contractAddress).harvest(_poolIndex, msg.sender);
     }
     
-    function getUserPoolReward(address contractAddress, uint256 _poolIndex, uint256 _stakeAmount, address _wallet) external view returns(uint256){
-        return IRevoStakingContract(contractAddress).getUserPoolReward(_poolIndex, _stakeAmount, _wallet);
+    function getUserPoolReward(address _contractAddress, uint256 _poolIndex, uint256 _stakeAmount, address _wallet) external view returns(uint256){
+        return IRevoStakingContract(_contractAddress).getUserPoolReward(_poolIndex, _stakeAmount, _wallet);
     }
     
-    function getHarvestable(address[] memory contractAddresses, address _wallet, uint256[] memory _poolIndexes) public view returns(uint256[] memory){
+    function getHarvestable(address[] memory _contractAddresses, address _wallet, uint256[] memory _poolIndexes) public view returns(uint256[] memory){
         uint256[] memory harvestArray = new uint256[](_poolIndexes.length);
         for(uint256 i = 0; i < _poolIndexes.length; i++){
-            harvestArray[i] = IRevoStakingContract(contractAddresses[i]).getHarvestable(_wallet, _poolIndexes[i]);
+            harvestArray[i] = IRevoStakingContract(_contractAddresses[i]).getHarvestable(_wallet, _poolIndexes[i]);
+        }
+        return harvestArray;
+    }
+    
+    /**********************
+    * Farming Proxy
+    *********************/
+    function getFarmingPools() public view returns(AbsctractFarmingPool[] memory){
+        uint256 size = 0;
+        for(uint256 i = 0; i < farmingPools.length; i++){
+            if(farmingPools[i] != 0x0000000000000000000000000000000000000000){
+                size += IRevoFarming(farmingPools[uint(i)]).getAllPools().length;
+            }
+        }
+        AbsctractFarmingPool[] memory pools = new AbsctractFarmingPool[](size);
+        uint256 arrayIndex;
+        for(int256 i = int(farmingPools.length) - 1; i >= 0; i--){
+            if(farmingPools[uint(i)] != 0x0000000000000000000000000000000000000000){
+                IRevoFarming farmingContract = IRevoFarming(farmingPools[uint(i)]);
+                
+                for(int256 p = int(farmingContract.getAllPools().length) - 1; p >= 0 ; p--){
+                    pools[arrayIndex].contractAddress = farmingPools[uint(i)];
+                    pools[arrayIndex].pool = farmingContract.getAllPools()[uint(p)];
+                    //LP token information
+                    (uint112 _reserve0, uint112 _reserve1,) = IPancakeContract(farmingContract.lpAddress()).getReserves();
+                    pools[arrayIndex].lpReserves0 = _reserve0;
+                    pools[arrayIndex].lpReserves1 = _reserve1;
+                    pools[arrayIndex].lpTotalSupply = IPancakeContract(farmingContract.lpAddress()).totalSupply();
+
+                    arrayIndex++;
+                }
+            }
+        }
+        return pools;
+    }
+    
+    function getUserStakesLP(address _user) public view returns (IRevoFarming.Stake[] memory){
+        uint256 size = 0;
+        for(uint256 i = 0; i < farmingPools.length; i++){
+            if(farmingPools[i] != 0x0000000000000000000000000000000000000000){
+                size += IRevoFarming(farmingPools[uint(i)]).getUserStakes(_user).length;
+            }
+        }
+        
+        IRevoFarming.Stake[] memory stakes = new IRevoFarming.Stake[](size);
+        
+        uint256 arrayIndex;
+        for(int256 i = int(farmingPools.length) - 1; i >= 0; i--){
+            if(farmingPools[uint(i)] != 0x0000000000000000000000000000000000000000){
+                IRevoFarming farmingContract = IRevoFarming(farmingPools[uint(i)]);
+                
+                for(int256 p = int(farmingContract.getUserStakes(_user).length) - 1; p >= 0 ; p--){
+                    stakes[arrayIndex] = farmingContract.getUserStakes(_user)[uint(p)];
+                    
+                    arrayIndex++;
+                }
+            }
+        }
+        return stakes;
+    }
+     
+    function stakeLp(address _contractAddress, uint256 _poolIndex, uint256 _lpAmount) public{
+        IRevoFarming(_contractAddress).stake(_poolIndex, msg.sender, _lpAmount);
+    }
+    
+    function withdrawLp(address _contractAddress, uint256 _poolIndex, uint256 amount) public{
+        IRevoFarming(_contractAddress).withdraw(_poolIndex, msg.sender, amount);
+    }
+    
+    function harvestFarming(address _contractAddress, uint256 _poolIndex) public{
+        IRevoFarming(_contractAddress).harvest(_poolIndex, msg.sender);
+    }
+    
+    function exitFarming(address _contractAddress, uint256 _poolIndex) public{
+        IRevoFarming(_contractAddress).exit(_poolIndex, msg.sender);
+    }
+    
+    function getHarvestableFarming(address[] memory _contractAddresses, address _wallet, uint256[] memory _poolIndexes) public view returns(uint256[] memory){
+        uint256[] memory harvestArray = new uint256[](_contractAddresses.length);
+        for(uint256 i = 0; i < _contractAddresses.length; i++){
+            harvestArray[i] = IRevoFarming(_contractAddresses[i]).earned(_poolIndexes[i], _wallet);
         }
         return harvestArray;
     }
