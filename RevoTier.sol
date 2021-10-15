@@ -186,22 +186,6 @@ contract RevoTier is Ownable{
         return tierIndex < 9999 ? tiers[tierIndex] : Tier(99, 0, 0, "");
     }
     
-    function test(address _wallet) public view returns(uint256){
-        string[] memory tokens = revoNFTToken.getTokensDbIdByOwnerAndCollection(_wallet, "COSMETIC");
-        bool found = false;
-        uint256 tierIndex = 9999;
-        for(uint i = 0; i < tokens.length; i++){
-            uint dbId = stringToUint(tokens[i]);
-            if(dbId >= diamondHandsMinId && dbId <= diamondHandsMaxId){
-                found = true;
-            }
-        }
-        if(found){
-            tierIndex = tierIndex < 9999 ? tierIndex.add(1) : 0;
-        }
-        return tierIndex;
-    }
-    
     function setTier(uint256 _tierIndex, uint256 _minRevo, uint256 _stakingAPRBonus, string memory _name) public onlyOwner{
         tiers[_tierIndex].index = _tierIndex;
         tiers[_tierIndex].minRevoToHold = _minRevo;
