@@ -19,6 +19,8 @@ interface IRevoLib{
 
 interface IRevoNFT{
   function nftsDbIds(string memory _collection, string memory _dbId) external view returns (uint256);
+  function mintRevo(address _to, string memory _collection, string memory _dbId) external;
+  function nextRevoId() external returns(uint256);
 }
 
 contract Context {
@@ -68,7 +70,7 @@ contract Ownable is Context {
     }
 }
 
-contract RevoNFTUtils is Ownable {
+contract RevoNFTMinter is Ownable {
     address public revoAddress;
     IRevoTokenContract private revoToken;
     address public revoLibAddress;
@@ -76,31 +78,13 @@ contract RevoNFTUtils is Ownable {
     
     IRevoNFT private revoNFT;
     
-    uint256 private nextRevoId;
-    uint256 public revoFees;
+    uint256[] public indexes;
+    string[] public dbIds;
     
-    event CreateNFT(address sender, string dbId, string collection);
-    
-    mapping(address => mapping(string => mapping(string => uint256))) public triggerMintHistory; 
-
     constructor(address _revoLibAddress, address _revoNFT) public{
         setRevoLib(_revoLibAddress);
         setRevo(revoLib.tokenRevoAddress());
         setRevoNFT(_revoNFT);
-        
-        revoFees = 10000000000000000000;
-    }
-    
-    function triggerCreateNFT(string memory _dbId, string memory _collection) public {
-        revoToken.transferFrom(msg.sender, address(this), revoFees);
-        
-        triggerMintHistory[msg.sender][_collection][_dbId] = revoFees;
-        
-        emit CreateNFT(msg.sender, _dbId, _collection);
-    }
-    
-    function setRevoFees(uint256 _fees) public onlyOwner {
-        revoFees = _fees;
     }
     
     /*
@@ -123,7 +107,22 @@ contract RevoNFTUtils is Ownable {
         revoNFT = IRevoNFT(_revoNFT);
     }
     
-    function withdrawRevo(uint256 _amount) public onlyOwner {
-        revoToken.transfer(owner(), _amount);
+    function mintRevoSimilarNFTBatch(address[] memory _receivers, string memory _collection, string[] memory _dbId) public onlyOwner {
+        indexes = new uint256[](_receivers.length);
+        dbIds = new string[](_receivers.length);
+        
+        for(uint256 i=0; i < _receivers.length; i++){
+            revoNFT.mintRevo(_receivers[i], _collection, _dbId[i]);
+            indexes[i] = revoNFT.nextRevoId();
+            dbIds[i] = _dbId[i];
+        }
+    }
+    
+    function getLastIndexes() public view returns(uint256[] memory){
+        return indexes;
+    }
+    
+    function getLastDbIds() public view returns(string[] memory){
+        return dbIds;
     }
 }

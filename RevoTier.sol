@@ -21,6 +21,10 @@ interface IRevoPoolManagerContract{
   function getLPStakedFromFarmingPools(address wallet) external view returns (uint256);
 }
 
+interface IRevoNFTToken{
+    function getTokensDbIdByOwnerAndCollection(address _owner, string memory _collection) external view returns(string[] memory ownerTokensDbId);
+}
+
 library SafeMath {
     function add(uint x, uint y) internal pure returns (uint z) {
         require((z = x + y) >= x, 'ds-math-add-overflow');
@@ -112,18 +116,25 @@ contract RevoTier is Ownable{
     bool public nftBoostEnabled;
     //Max Tier boost 
     uint256 public maxTierIndexBoost;
+    //Diamond hand nft id
+    uint256 public diamondHandsMinId;
+    uint256 public diamondHandsMaxId;
+    //Revo NFT Token
+    IRevoNFTToken revoNFTToken;
     
-    
-    constructor(address _revoLibAddress, address _revoPoolManager) {
+    constructor(address _revoLibAddress, address _revoPoolManager, address _revoNFTToken) {
         setRevoLib(_revoLibAddress);
         setRevoToken(revoLib.tokenRevoAddress());
         setRevoPoolManager(_revoPoolManager);
+        setRevoNFTToken(_revoNFTToken);
         //Enable liquidity balance
         setLiquidityBalanceEnable(true);
         //Enable staking balance
         setStakingBalanceEnable(true);
         //Enable NFT Tier boost 
-        setNftBoostEnable(false);
+        setNftBoostEnable(true);
+        //Set Diamond hands Ids 
+        setDiamondHandsId(296, 2586);
         //Set Max tier index boost to 3 included
         setMaxTierIndexBoost(3);
         
@@ -158,12 +169,37 @@ contract RevoTier is Ownable{
             }
         }
         
-        if(nftBoostEnabled && tierIndex <= maxTierIndexBoost){
-            //TODO 
-            //tierIndex = tierIndex.add(1);
+        if(nftBoostEnabled && (tierIndex <= maxTierIndexBoost || tierIndex == 9999)){
+            string[] memory tokens = revoNFTToken.getTokensDbIdByOwnerAndCollection(_wallet, "COSMETIC");
+            bool found = false;
+            for(uint i = 0; i < tokens.length; i++){
+                uint dbId = stringToUint(tokens[i]);
+                if(dbId >= diamondHandsMinId && dbId <= diamondHandsMaxId){
+                    found = true;
+                }
+            }
+            if(found){
+                tierIndex = tierIndex < 9999 ? tierIndex.add(1) : 0;
+            }
         }
         
         return tierIndex < 9999 ? tiers[tierIndex] : Tier(99, 0, 0, "");
+    }
+    
+    function test(address _wallet) public view returns(uint256){
+        string[] memory tokens = revoNFTToken.getTokensDbIdByOwnerAndCollection(_wallet, "COSMETIC");
+        bool found = false;
+        uint256 tierIndex = 9999;
+        for(uint i = 0; i < tokens.length; i++){
+            uint dbId = stringToUint(tokens[i]);
+            if(dbId >= diamondHandsMinId && dbId <= diamondHandsMaxId){
+                found = true;
+            }
+        }
+        if(found){
+            tierIndex = tierIndex < 9999 ? tierIndex.add(1) : 0;
+        }
+        return tierIndex;
     }
     
     function setTier(uint256 _tierIndex, uint256 _minRevo, uint256 _stakingAPRBonus, string memory _name) public onlyOwner{
@@ -198,6 +234,13 @@ contract RevoTier is Ownable{
     }
     
     /*
+    Set revoNFTToken Interface
+    */
+    function setRevoNFTToken(address _revoNFTToken) public onlyOwner {
+        revoNFTToken = IRevoNFTToken(_revoNFTToken);
+    }
+    
+    /*
     Set revoPoolManager Address & Interface
     */
     function setNftBoostEnable(bool _enable) public onlyOwner {
@@ -223,6 +266,14 @@ contract RevoTier is Ownable{
     */
     function setMaxTierIndexBoost(uint256 _index) public onlyOwner{
         maxTierIndexBoost = _index;
+    }
+    
+    /*
+    Set diamond hand min max id
+    */
+    function setDiamondHandsId(uint256 _min, uint256 _max) public onlyOwner{
+        diamondHandsMinId = _min;
+        diamondHandsMaxId = _max;
     }
     
     function getTier(uint256 _index) public view returns(Tier memory){
@@ -255,4 +306,18 @@ contract RevoTier is Ownable{
         return revoPoolManager.getRevoStakedFromStakingPools(_wallet);
     }
     
+    /*
+    String to uint
+    */
+    function stringToUint(string memory s) private view returns (uint result) {
+        bytes memory b = bytes(s);
+        uint i;
+        result = 0;
+        for (i = 0; i < b.length; i++) {
+            uint c = uint8(b[i]);
+            if (c >= 48 && c <= 57) {
+                result = result * 10 + (c - 48);
+            }
+        }
+    }
 }

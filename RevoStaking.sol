@@ -1,3 +1,7 @@
+/**
+ *Submitted for verification at BscScan.com on 2021-05-31
+*/
+
 pragma solidity =0.8.0;
 
 interface IRevoTokenContract{
