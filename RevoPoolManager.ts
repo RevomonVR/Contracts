@@ -161,8 +161,12 @@ contract RevoPoolManager is Ownable{
     //Farming pools
     address[] public farmingPools;
     
-    constructor(address _revoAddress) {
+    //Maximum amount for staking 
+    uint256 maxRevoStaking;
+    
+    constructor(address _revoAddress, uint256 _maxRevoStaking) {
         setRevo(_revoAddress);
+        setMaxRevoStaking(_maxRevoStaking);
     }
     
     /*
@@ -392,6 +396,13 @@ contract RevoPoolManager is Ownable{
     function setRevo(address _revo) public onlyOwner {
         revoAddress = _revo;
         revoToken = IRevoTokenContract(revoAddress);
+    }
+    
+    /*
+    Set max amount for staking
+    */
+    function setMaxRevoStaking(uint256 _maxRevoStaking) public onlyOwner {
+        maxRevoStaking = _maxRevoStaking;
     }
     
     function getPools(bool _isFarming) public view returns(address[] memory) {
