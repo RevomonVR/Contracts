@@ -147,8 +147,7 @@ contract RevoTier is Ownable{
         setTier(5, 100000000000000000000000, 80, "Master");
     }
     
-    
-    function getRealTimeTier(address _wallet) public view returns(Tier memory) {
+    function getTierIndex(address _wallet) public view returns(uint256){
         uint256 balance = revoToken.balanceOf(_wallet);
         
         //Get Revo from Cake V2 Pool & Farming pools 
@@ -168,6 +167,20 @@ contract RevoTier is Ownable{
                 tierIndex = i;
             }
         }
+        
+        return tierIndex;
+    }
+    
+    
+    function getRealTimeTier(address _wallet) public view returns(Tier memory) {
+        uint256 tierIndex = getTierIndex(_wallet);
+        
+        return tierIndex < 9999 ? tiers[tierIndex] : Tier(99, 0, 0, "");
+    }
+    
+    function getRealTimeTierWithDiamondHands(address _wallet) public view returns(Tier memory){
+        
+        uint256 tierIndex = getTierIndex(_wallet);
         
         if(nftBoostEnabled && (tierIndex <= maxTierIndexBoost || tierIndex == 9999)){
             string[] memory tokens = revoNFTToken.getTokensDbIdByOwnerAndCollection(_wallet, "COSMETIC");

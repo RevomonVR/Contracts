@@ -280,6 +280,8 @@ contract RevoPoolManager is Ownable{
     
     
     function stake(address _contractAddress, uint256 _poolIndex, uint256 _revoAmount) public{ 
+        //Max 110k Revo 
+        require(_revoAmount <= 110000000000000000000000, "Maximum amount is 110k REVO");
         IRevoStakingContract(_contractAddress).performStake(_poolIndex, _revoAmount, msg.sender);
     }
     
