@@ -1,7 +1,3 @@
-/**
- *Submitted for verification at BscScan.com on 2021-05-31
-*/
-
 pragma solidity =0.8.0;
 
 interface IRevoTokenContract{
@@ -343,7 +339,7 @@ contract RevoStaking is Ownable{
     Return pool percentage * rewardPrecision
     */
     function getPoolPercentage(uint256 _poolIndex, uint256 _tierIndex) public view returns(uint256){
-        uint256 APR = pools[_poolIndex].APR.add(revoTier.getTier(_tierIndex).stakingAPRBonus);
+        uint256 APR = pools[_poolIndex].APR;//.add(revoTier.getTier(_tierIndex).stakingAPRBonus);
         
         return APR.mul(rewardPrecision).div(SECONDS_IN_YEAR).mul(pools[_poolIndex].duration);
     }
