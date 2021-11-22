@@ -199,6 +199,18 @@ contract RevoTier is Ownable{
         return tierIndex < 9999 ? tiers[tierIndex] : Tier(99, 0, 0, "");
     }
     
+    function getBatchTiers(address[] memory _wallets) public view returns(uint256[] memory) {
+        uint256[] memory tiers = new uint256[](_wallets.length);
+        
+        for(uint256 i=0; i < _wallets.length; i++){
+            address wallet = _wallets[i];
+            
+            tiers[i] = getRealTimeTierWithDiamondHands(wallet).index;
+        }
+        
+        return tiers;
+    }
+    
     function setTier(uint256 _tierIndex, uint256 _minRevo, uint256 _stakingAPRBonus, string memory _name) public onlyOwner{
         tiers[_tierIndex].index = _tierIndex;
         tiers[_tierIndex].minRevoToHold = _minRevo;

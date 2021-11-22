@@ -121,6 +121,7 @@ contract RevoStaking is Ownable{
         uint256 duration;
         uint256 APR;
         bool terminated;
+        uint256 maxRevoStaking;
     }
     
     struct Stake {
@@ -170,13 +171,12 @@ contract RevoStaking is Ownable{
         //User must belong to at least the first tier
         require(userTier.minRevoToHold > 0, "User must belong to a tier");
         
-        //Minimum amount >= minRevoToHold of the tier && Maximum amount < minRevoToHold of the tier + 1 
-        if(userTier.index < 5){
-            require(_revoAmount >= userTier.minRevoToHold && _revoAmount < revoTier.getTier(userTier.index + 1).minRevoToHold, "Amount to stake must be in tier range");
-        }else{
-            //No max amount for the last tier
-            require(_revoAmount >= userTier.minRevoToHold, "Amount to stake must be in tier range");
-        }
+        //Max Revo amount to stake 
+        require(_revoAmount <= pools[_poolIndex].maxRevoStaking, "Please stake less than the max amount");
+        
+        //Stake more than 0
+        require(_revoAmount > 0, "Please stake more than 0 Revo");
+        
         _;
     }
     
@@ -194,8 +194,8 @@ contract RevoStaking is Ownable{
     /*
     Create a new pool to a new incremented index + transfer Revo to it
     */
-    function createPool(string memory _name, uint256 _balance, uint256 _duration, uint256 _apr, bool _transfer) public onlyOwner {
-        updatePool(poolIndex, _name, _balance, _duration, _apr);
+    function createPool(string memory _name, uint256 _balance, uint256 _duration, uint256 _apr, bool _transfer, uint256 _maxRevoStaking) public onlyOwner {
+        updatePool(poolIndex, _name, _balance, _duration, _apr, _maxRevoStaking);
         if(_transfer){
             revoToken.transferFrom(msg.sender, address(this), _balance);
         }
@@ -205,13 +205,14 @@ contract RevoStaking is Ownable{
     /*
     Update a pool to specific index
     */
-    function updatePool(uint256 _index, string memory _name, uint256 _balance, uint256 _duration, uint256 _apr) public onlyOwner {
+    function updatePool(uint256 _index, string memory _name, uint256 _balance, uint256 _duration, uint256 _apr, uint256 _maxRevoStaking) public onlyOwner {
         pools[_index].poolName = _name;
         pools[_index].poolIndex = _index;
         pools[_index].startTime = block.timestamp;
         pools[_index].totalReward = _balance;
         pools[_index].duration = _duration;
         pools[_index].APR = _apr;
+        pools[_index].maxRevoStaking = _maxRevoStaking;
     }
     
     /*

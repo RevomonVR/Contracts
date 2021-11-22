@@ -30,6 +30,7 @@ interface IRevoStakingContract{
         uint256 duration;
         uint256 APR;
         bool terminated;
+        uint256 maxRevoStaking;
     }
     
     function getUserStakes(address _user) external view returns (Stake[] memory);
@@ -145,6 +146,11 @@ contract RevoPoolManager is Ownable{
         IRevoStakingContract.Pool pool;
     }
     
+    struct AbsctractUserStake {
+        address contractAddress;
+        IRevoStakingContract.Stake stake;
+    }
+    
     struct AbsctractFarmingPool {
         address contractAddress;
         uint256 lpReserves0;
@@ -161,12 +167,8 @@ contract RevoPoolManager is Ownable{
     //Farming pools
     address[] public farmingPools;
     
-    //Maximum amount for staking 
-    uint256 maxRevoStaking;
-    
-    constructor(address _revoAddress, uint256 _maxRevoStaking) {
+    constructor(address _revoAddress) {
         setRevo(_revoAddress);
-        setMaxRevoStaking(_maxRevoStaking);
     }
     
     /*
@@ -257,7 +259,7 @@ contract RevoPoolManager is Ownable{
         return pools;
     }
     
-    function getUserStakes(address _user) public view returns (IRevoStakingContract.Stake[] memory){
+    function getUserStakes(address _user) public view returns (AbsctractUserStake[] memory){
         uint256 size = 0;
         for(uint256 i = 0; i < stakingPools.length; i++){
             if(stakingPools[i] != 0x0000000000000000000000000000000000000000){
@@ -265,7 +267,7 @@ contract RevoPoolManager is Ownable{
             }
         }
         
-        IRevoStakingContract.Stake[] memory stakes = new IRevoStakingContract.Stake[](size);
+        AbsctractUserStake[] memory stakes = new AbsctractUserStake[](size);
         
         uint256 arrayIndex;
         for(int256 i = int(stakingPools.length) - 1; i >= 0; i--){
@@ -273,7 +275,8 @@ contract RevoPoolManager is Ownable{
                 IRevoStakingContract stakingContract = IRevoStakingContract(stakingPools[uint(i)]);
                 
                 for(int256 p = int(stakingContract.getUserStakes(_user).length) - 1; p >= 0 ; p--){
-                    stakes[arrayIndex] = stakingContract.getUserStakes(_user)[uint(p)];
+                    stakes[arrayIndex].contractAddress = stakingPools[uint(i)];
+                    stakes[arrayIndex].stake = stakingContract.getUserStakes(_user)[uint(p)];
                     
                     arrayIndex++;
                 }
@@ -284,8 +287,6 @@ contract RevoPoolManager is Ownable{
     
     
     function stake(address _contractAddress, uint256 _poolIndex, uint256 _revoAmount) public{ 
-        //Max 110k Revo 
-        require(_revoAmount <= 110000000000000000000000, "Maximum amount is 110k REVO");
         IRevoStakingContract(_contractAddress).performStake(_poolIndex, _revoAmount, msg.sender);
     }
     
@@ -396,13 +397,6 @@ contract RevoPoolManager is Ownable{
     function setRevo(address _revo) public onlyOwner {
         revoAddress = _revo;
         revoToken = IRevoTokenContract(revoAddress);
-    }
-    
-    /*
-    Set max amount for staking
-    */
-    function setMaxRevoStaking(uint256 _maxRevoStaking) public onlyOwner {
-        maxRevoStaking = _maxRevoStaking;
     }
     
     function getPools(bool _isFarming) public view returns(address[] memory) {
