@@ -151,6 +151,8 @@ contract RevoStaking is Ownable{
     uint public poolIndex;
     //Reward precision
     uint256 public rewardPrecision = 100000000000000;
+    //Total Reward
+    uint256 public totalRewardRemaining;
     
     //EVENTS
     event StakeEvent(uint256 revoAmount, address wallet);
@@ -269,6 +271,11 @@ contract RevoStaking is Ownable{
         stake.withdrawStake = true;
         
         uint256 harvestable = getHarvestable(_wallet, _poolIndex);
+
+        //Enough reward
+        require(totalRewardRemaining.sub(harvestable) > 0, "Not enough reward in contract");
+        totalRewardRemaining = totalRewardRemaining.sub(harvestable);
+
         revoToken.transfer(_wallet, stake.stakedAmount.add(harvestable));
         
         emit UnstakeEvent(stake.stakedAmount, harvestable, _wallet);
@@ -286,13 +293,18 @@ contract RevoStaking is Ownable{
         require(!stake.withdrawStake, "Revo already unstaked");
         
         //Transfer harvestable 
-        uint256 havestable = getHarvestable(_wallet, _poolIndex);
-        revoToken.transfer(_wallet, havestable);
+        uint256 harvestable = getHarvestable(_wallet, _poolIndex);
+
+        //Enough reward
+        require(totalRewardRemaining.sub(harvestable) > 0, "Not enough reward in contract");
+        totalRewardRemaining = totalRewardRemaining.sub(harvestable);
+
+        revoToken.transfer(_wallet, harvestable);
         
         //Update harvested
         stake.harvested = getHarvest(_wallet, _poolIndex);
         
-        emit HarvestEvent(havestable, _wallet);
+        emit HarvestEvent(harvestable, _wallet);
     }
     
     /*
@@ -387,6 +399,15 @@ contract RevoStaking is Ownable{
 
     function burnEmergencyRight() public onlyOwner {
         emergencyRightBurned = true;
+    }
+
+    /*
+    Emergency transfer Revo
+    */
+    function addReward(uint256 _revoAmount) public onlyOwner {
+        //Transfer REVO
+        totalRewardRemaining = totalRewardRemaining.add(_revoAmount);
+        revoToken.transferFrom(msg.sender, address(this), _revoAmount);
     }
     
     /*
