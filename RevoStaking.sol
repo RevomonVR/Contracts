@@ -116,6 +116,7 @@ contract RevoStaking is Ownable{
         uint256 poolIndex;
         uint256 startTime;
         uint256 totalReward;
+        uint256 totalRewardRemaining;
         uint256 totalStaked;
         uint256 currentReward;
         uint256 duration;
@@ -151,8 +152,6 @@ contract RevoStaking is Ownable{
     uint public poolIndex;
     //Reward precision
     uint256 public rewardPrecision = 100000000000000;
-    //Total Reward
-    uint256 public totalRewardRemaining;
     
     //EVENTS
     event StakeEvent(uint256 revoAmount, address wallet);
@@ -196,11 +195,8 @@ contract RevoStaking is Ownable{
     /*
     Create a new pool to a new incremented index + transfer Revo to it
     */
-    function createPool(string memory _name, uint256 _balance, uint256 _duration, uint256 _apr, bool _transfer, uint256 _maxRevoStaking) public onlyOwner {
+    function createPool(string memory _name, uint256 _balance, uint256 _duration, uint256 _apr, uint256 _maxRevoStaking) public onlyOwner {
         updatePool(poolIndex, _name, _balance, _duration, _apr, _maxRevoStaking);
-        if(_transfer){
-            revoToken.transferFrom(msg.sender, address(this), _balance);
-        }
         poolIndex++;
     }
     
@@ -215,6 +211,10 @@ contract RevoStaking is Ownable{
         pools[_index].duration = _duration;
         pools[_index].APR = _apr;
         pools[_index].maxRevoStaking = _maxRevoStaking;
+
+        if(pools[_index].totalRewardRemaining < pools[_index].totalReward){
+            addReward(pools[_index].totalReward.sub(pools[_index].totalRewardRemaining), _index);  
+        }
     }
     
     /*
@@ -273,8 +273,8 @@ contract RevoStaking is Ownable{
         uint256 harvestable = getHarvestable(_wallet, _poolIndex);
 
         //Enough reward
-        require(totalRewardRemaining.sub(harvestable) > 0, "Not enough reward in contract");
-        totalRewardRemaining = totalRewardRemaining.sub(harvestable);
+        require(pools[_poolIndex].totalRewardRemaining.sub(harvestable) > 0, "Not enough reward in contract");
+        pools[_poolIndex].totalRewardRemaining = pools[_poolIndex].totalRewardRemaining.sub(harvestable);
 
         revoToken.transfer(_wallet, stake.stakedAmount.add(harvestable));
         
@@ -296,8 +296,8 @@ contract RevoStaking is Ownable{
         uint256 harvestable = getHarvestable(_wallet, _poolIndex);
 
         //Enough reward
-        require(totalRewardRemaining.sub(harvestable) > 0, "Not enough reward in contract");
-        totalRewardRemaining = totalRewardRemaining.sub(harvestable);
+        require(pools[_poolIndex].totalRewardRemaining.sub(harvestable) > 0, "Not enough reward in contract");
+        pools[_poolIndex].totalRewardRemaining = pools[_poolIndex].totalRewardRemaining.sub(harvestable);
 
         revoToken.transfer(_wallet, harvestable);
         
@@ -402,11 +402,11 @@ contract RevoStaking is Ownable{
     }
 
     /*
-    Add reward tokens
+    Emergency transfer Revo
     */
-    function addReward(uint256 _revoAmount) public onlyOwner {
+    function addReward(uint256 _revoAmount, uint256 _poolIndex) public onlyOwner {
         //Transfer REVO
-        totalRewardRemaining = totalRewardRemaining.add(_revoAmount);
+        pools[_poolIndex].totalRewardRemaining = pools[_poolIndex].totalRewardRemaining.add(_revoAmount);
         revoToken.transferFrom(msg.sender, address(this), _revoAmount);
     }
     
