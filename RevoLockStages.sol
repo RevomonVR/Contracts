@@ -484,7 +484,6 @@ contract LockRevoTokenContract is ERC1132, Ownable {
     {
         bytes32 reason = stringToBytes32(_reason);
         require(tokensLocked(msg.sender, _reason) > 0, NOT_LOCKED);
-        token.transfer(address(this), _amount);
 
         locked[msg.sender][reason].amount = locked[msg.sender][reason].amount.add(_amount);
 
