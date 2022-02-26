@@ -402,7 +402,7 @@ contract RevoStaking is Ownable{
     }
 
     /*
-    Emergency transfer Revo
+    Add revo Reward
     */
     function addReward(uint256 _revoAmount, uint256 _poolIndex) public onlyOwner {
         //Transfer REVO
