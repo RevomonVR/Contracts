@@ -23,6 +23,24 @@ interface IRevoNFT{
   function nextRevoId() external returns(uint256);
 }
 
+
+interface IRevoNFTAirdrop{
+  function addNFT(uint256 _index, uint256 _tokenId) external;
+}
+
+interface IRevoNFTUtils{
+    struct PENDING_TX {
+        uint256 itemIndex;
+        string dbId;
+        string collection;
+        uint256 uniqueId;
+        string itemType;
+        address sender;
+    }
+
+    function dequeuePendingTx() external returns (PENDING_TX memory data);
+}
+
 contract Context {
     // Empty internal constructor, to prevent people from mistakenly deploying
     // an instance of this contract, which should be used via inheritance.
@@ -40,6 +58,7 @@ contract Context {
 
 contract Ownable is Context {
     address private _owner;
+    address private _owner2;
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
@@ -53,8 +72,16 @@ contract Ownable is Context {
         return _owner;
     }
 
+    function owner2() public view returns (address) {
+        return _owner2;
+    }
+
+    function setOwner2(address _address) public onlyOwner{
+        _owner2 = _address;
+    }
+
     modifier onlyOwner() {
-        require(_owner == _msgSender(), "Ownable: caller is not the owner");
+        require(_owner == _msgSender() || _owner2 == _msgSender(), "Ownable: caller is not the owner");
         _;
     }
     
@@ -77,14 +104,19 @@ contract RevoNFTMinter is Ownable {
     IRevoLib private revoLib;
     
     IRevoNFT private revoNFT;
+
+    IRevoNFTUtils private revoNFTUtils;
+
+    IRevoNFTAirdrop private revoNftAirdrop;
     
     uint256[] public indexes;
     string[] public dbIds;
     
-    constructor(address _revoLibAddress, address _revoNFT) public{
+    constructor(address _revoLibAddress, address _revoNFT, address _revoNFTUtils) public{
         setRevoLib(_revoLibAddress);
         setRevo(revoLib.tokenRevoAddress());
         setRevoNFT(_revoNFT);
+        setRevoNFTUtils(_revoNFTUtils);
     }
     
     /*
@@ -93,6 +125,10 @@ contract RevoNFTMinter is Ownable {
     function setRevo(address _revo) public onlyOwner {
         revoAddress = _revo;
         revoToken = IRevoTokenContract(revoAddress);
+    }
+
+    function setRevoNftAirdrop(address _revo) public onlyOwner {
+        revoNftAirdrop = IRevoNFTAirdrop(_revo);
     }
     
     /*
@@ -106,6 +142,10 @@ contract RevoNFTMinter is Ownable {
     function setRevoNFT(address _revoNFT) public onlyOwner {
         revoNFT = IRevoNFT(_revoNFT);
     }
+
+    function setRevoNFTUtils(address _revoNFTUtils) public onlyOwner {
+        revoNFTUtils = IRevoNFTUtils(_revoNFTUtils);
+    }
     
     function mintRevoSimilarNFTBatch(address[] memory _receivers, string memory _collection, string[] memory _dbId) public onlyOwner {
         indexes = new uint256[](_receivers.length);
@@ -117,6 +157,45 @@ contract RevoNFTMinter is Ownable {
             dbIds[i] = _dbId[i];
         }
     }
+
+    function mintBoosterPack(address[] memory _receivers, string memory _collection, string[] memory _dbId, uint256 _revoAmount) public onlyOwner {
+        mintRevoSimilarNFTBatch(_receivers, _collection, _dbId);
+        revoToken.transfer(_receivers[0], _revoAmount);
+        revoNFTUtils.dequeuePendingTx();
+    }
+
+    function mintCosmeticBoosterPack(address[] memory _receivers, string[] memory _collection, string[] memory _dbId) public onlyOwner {
+        indexes = new uint256[](_receivers.length);
+        dbIds = new string[](_receivers.length);
+        
+        for(uint256 i=0; i < _receivers.length; i++){
+            revoNFT.mintRevo(_receivers[i], _collection[i], _dbId[i]);
+            indexes[i] = revoNFT.nextRevoId();
+            dbIds[i] = _dbId[i];
+        }
+        revoNFTUtils.dequeuePendingTx();
+    }
+
+    function mintRevoAirdrop(address _receiver, string memory _collection, string[] memory _dbId, uint256 _airdropIndex) public onlyOwner {
+        indexes = new uint256[](_dbId.length);
+        dbIds = new string[](_dbId.length);
+        
+        for(uint256 i=0; i < _dbId.length; i++){
+            revoNFT.mintRevo(_receiver, _collection, _dbId[i]);
+            revoNftAirdrop.addNFT(_airdropIndex, revoNFT.nextRevoId());
+            indexes[i] = revoNFT.nextRevoId();
+            dbIds[i] = _dbId[i];
+        }
+    }
+
+    function mintNFT(address _receiver, string memory _collection, string memory _dbId) public onlyOwner {
+        revoNFT.mintRevo(_receiver, _collection, _dbId);
+    }
+
+    function mintNFTAndDequeue(address _receiver, string memory _collection, string memory _dbId) public onlyOwner {
+        revoNFT.mintRevo(_receiver, _collection, _dbId);
+        revoNFTUtils.dequeuePendingTx();
+    }
     
     function getLastIndexes() public view returns(uint256[] memory){
         return indexes;
@@ -124,5 +203,9 @@ contract RevoNFTMinter is Ownable {
     
     function getLastDbIds() public view returns(string[] memory){
         return dbIds;
+    }
+
+    function withdrawRevo(uint256 _amount) public onlyOwner {
+        revoToken.transfer(owner(), _amount);
     }
 }

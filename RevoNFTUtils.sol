@@ -18,8 +18,35 @@ interface IRevoLib{
 }
 
 interface IRevoNFT{
-  function nftsDbIds(string memory _collection, string memory _dbId) external view returns (uint256);
+    struct Token {
+        string collection;
+        string dbId;
+        uint256 tokenId;
+    }
+    
+    function nftsDbIds(string memory _collection, string memory _dbId) external view returns (uint256);
+    function getTokensDbIdByOwnerAndCollection(address _owner, string memory _collection) external view returns(string[] memory ownerTokensDbId);
+    function burn(uint256 tokenId) external;
+    function transferFrom(address from, address to, uint256 tokenId) external;
+    function getTokensByOwner(address _owner) external view returns(Token[] memory ownerTokens);
 }
+
+interface IRevoTierContract{
+    function getRealTimeTier(address _wallet) external view returns (Tier memory);
+    function getTier(uint256 _index) external view returns(Tier memory);
+    
+    struct Tier {
+        uint256 index;
+        uint256 minRevoToHold;
+        uint256 stakingAPRBonus;
+        string name;
+    }
+}
+
+interface IRevoEggFarmer{
+    function hatchEgg(uint256 _tokenId, address user) external;
+}
+    
 
 library SafeMath {
     function add(uint x, uint y) internal pure returns (uint z) {
@@ -52,6 +79,7 @@ contract Context {
 
 contract Ownable is Context {
     address private _owner;
+    address private _owner2;
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
@@ -65,8 +93,16 @@ contract Ownable is Context {
         return _owner;
     }
 
+    function owner2() public view returns (address) {
+        return _owner2;
+    }
+
+    function setOwner2(address _address) public onlyOwner{
+        _owner2 = _address;
+    }
+
     modifier onlyOwner() {
-        require(_owner == _msgSender(), "Ownable: caller is not the owner");
+        require(_owner == _msgSender() || _owner2 == _msgSender(), "Ownable: caller is not the owner");
         _;
     }
     
@@ -89,6 +125,9 @@ contract RevoNFTUtils is Ownable {
     IRevoTokenContract private revoToken;
     address public revoLibAddress;
     IRevoLib private revoLib;
+    address public tierAddress;
+    IRevoTierContract revoTier;
+    IRevoEggFarmer revoEggFarmer;
     
     IRevoNFT private revoNFT;
     
@@ -96,14 +135,16 @@ contract RevoNFTUtils is Ownable {
     uint256 public revoFees;
     
     uint256 public counter;
-    
+    uint256 public minTierBooster = 4;
+    ITEMS_SALEABLE[99] public itemSaleable;
     //PENDING BUY
-    ITEMS_SELABLE[99] public itemsSelable;
     mapping(uint256 => PENDING_TX) pendingTx;
     uint256 public firstPending = 1;
     uint256 public lastPending = 0;
+
+    mapping(address => mapping(string => mapping(string => uint256))) public triggerMintHistory; 
     
-    struct ITEMS_SELABLE {
+    struct ITEMS_SALEABLE {
         uint256 index;
         string name;
         string description;
@@ -112,7 +153,7 @@ contract RevoNFTUtils is Ownable {
         bool enabled;
         uint256 count;
         uint256 maxItems;
-        uint8[3] prices;
+        uint256[3] prices;
     }
     
     struct PENDING_TX {
@@ -122,38 +163,35 @@ contract RevoNFTUtils is Ownable {
         uint256 uniqueId;
         string itemType;
         address sender;
+        uint256[] tokenIds;
     }
+
     
     event CreateNFT(address sender, string dbId, string collection);
     event BuyItem(address sender, uint256 index);
-    
-    mapping(address => mapping(string => mapping(string => uint256))) public triggerMintHistory; 
+    event HatchEgg(address sender, uint256 tokenId);
+    event OpenBooster(address sender, uint256 tokenId);
 
-    constructor(address _revoLibAddress, address _revoNFT) public{
+    constructor(address _revoLibAddress, address _revoNFT, address _revoTier) {
         setRevoLib(_revoLibAddress);
         setRevo(revoLib.tokenRevoAddress());
         setRevoNFT(_revoNFT);
+        setRevoTier(_revoTier);
         
-        revoFees = 10000000000000000000;
-        
-        uint8[3] memory prices = [1,2,3];
-        editItemSelable(0, "REVUP_NAME", "R3VUP description", 1, "image_url", "R3VUP", true, 0, 999999999, prices);
-        editItemSelable(1, "EGG_NORMAL_NAME", "Egg normal description", 1, "image_url", "EGG_NORMAL", true, 0, 999999999, prices);
-        editItemSelable(2, "EGG_RARE_NAME", "Egg rare description", 1, "image_url", "EGG_RARE", true, 0, 999999999, prices);
-        //TODO LEGENDARY ONLY FOR MASTER TIER
-        editItemSelable(3, "EGG_LEG_NAME", "Egg legendary description", 1, "image_url", "EGG_LEGENDARY", true, 0, 999999999, prices);
-        editItemSelable(4, "BOOSTER_NAME", "Booster description", 1, "image_url", "BOOSTER", true, 0, 999999999, prices);
+        revoFees = 12000000000000000000;
     }
     
     /*
     Trigger nft creation
     */
     function triggerCreateNFT(string memory _dbId, string memory _collection) public {
-        //revoToken.transferFrom(msg.sender, address(this), revoFees);
+        require(canMint(msg.sender), "You must own a R3V-UP to mint.");
+
+        revoToken.transferFrom(msg.sender, address(this), revoFees);
         
         triggerMintHistory[msg.sender][_collection][_dbId] = revoFees;
         
-        enqueuePendingTx(PENDING_TX(0, _dbId, _collection, counter, "", msg.sender));
+        enqueuePendingTx(PENDING_TX(0, _dbId, _collection, counter, "", msg.sender, new uint[](0)));
         
         emit CreateNFT(msg.sender, _dbId, _collection);
         
@@ -164,32 +202,73 @@ contract RevoNFTUtils is Ownable {
     Buy item sellable & add pending buy to queue
     */
     function buyItem(uint256 _itemIndex) public {
-        require(itemsSelable[_itemIndex].count <= itemsSelable[_itemIndex].maxItems, "All items sold");
+        //Check if item is available in inventory
+        require(itemSaleable[_itemIndex].count < itemSaleable[_itemIndex].maxItems, "All items sold");
+        //Must be master to buy booster
+        require(!compareStrings(itemSaleable[_itemIndex].itemType, "BOOSTER") || revoTier.getRealTimeTier(msg.sender).index >= minTierBooster, "Must belong to minTier to buy booster");
         
-        enqueuePendingTx(PENDING_TX(_itemIndex, "", "", counter, itemsSelable[_itemIndex].itemType, msg.sender));
+        enqueuePendingTx(PENDING_TX(_itemIndex, "", "", counter, itemSaleable[_itemIndex].itemType, msg.sender, new uint[](0)));
         
         revoToken.transferFrom(msg.sender, address(this), getItemPrice(_itemIndex));
         
-        itemsSelable[_itemIndex].count = itemsSelable[_itemIndex].count.add(1);
+        itemSaleable[_itemIndex].count = itemSaleable[_itemIndex].count.add(1);
         
-        //emit BuyItem(msg.sender, itemsSellable[_itemIndex].index);
+        emit BuyItem(msg.sender, itemSaleable[_itemIndex].index);
         
         counter++;
     }
+
+    function hatchEgg(uint256 _tokenId) public {
+        revoEggFarmer.hatchEgg(_tokenId, msg.sender);
+
+        enqueuePendingTx(PENDING_TX(_tokenId, "", "EGG", counter, "HATCH", msg.sender, new uint[](0)));
+
+        emit HatchEgg(msg.sender, _tokenId);
+
+        counter++;
+    }
+
+    function openBooster(uint256 _tokenId) public {
+        require(isNFTBooster(_tokenId, msg.sender), "NFT is not a booster");
+
+        //TRANSFER AND BURN BOOSTER NFT
+        revoNFT.transferFrom(msg.sender, address(this), _tokenId);
+        revoNFT.burn(_tokenId);
+
+        enqueuePendingTx(PENDING_TX(_tokenId, "", "BOOSTER", counter, "OPEN", msg.sender, new uint[](0)));
+
+        emit OpenBooster(msg.sender, _tokenId);
+
+        counter++;
+    }
+
+    function isNFTBooster(uint256 _tokenId, address _user) public view returns(bool){
+        IRevoNFT.Token[] memory tokens = revoNFT.getTokensByOwner(_user);
+        for(uint256 i = 0; i < tokens.length; i++){
+            if(tokens[i].tokenId == _tokenId && compareStrings(tokens[i].collection, "BOOSTER")){
+                return true;
+            }
+        }
+        return false;
+    }
     
     function getItemPrice(uint256 _itemIndex) public view returns(uint256){
-        uint256 price = itemsSelable[_itemIndex].price;
+        uint256 price = itemSaleable[_itemIndex].price;
         
-        if(!compareStrings(itemsSelable[_itemIndex].itemType, "R3VUP")){
+        if(!compareStrings(itemSaleable[_itemIndex].itemType, "R3VUP")){
             
-            uint256 step = itemsSelable[_itemIndex].maxItems / 3;
-            uint priceIndex = itemsSelable[_itemIndex].count <= step ? 0 :
-            itemsSelable[_itemIndex].count <= (step * 2) ? 1 : 2;
+            uint256 step = itemSaleable[_itemIndex].maxItems / 3;
+            uint priceIndex = itemSaleable[_itemIndex].count < step ? 0 :
+            itemSaleable[_itemIndex].count < (step * 2) ? 1 : 2;
             
-            price = itemsSelable[_itemIndex].prices[priceIndex];
+            price = itemSaleable[_itemIndex].prices[priceIndex];
         }
         
         return price;
+    }
+
+    function canMint(address user) public view returns(bool){
+        return revoNFT.getTokensDbIdByOwnerAndCollection(user, "R3VUP").length > 0;
     }
     
     function setRevoFees(uint256 _fees) public onlyOwner {
@@ -215,40 +294,63 @@ contract RevoNFTUtils is Ownable {
     function setRevoNFT(address _revoNFT) public onlyOwner {
         revoNFT = IRevoNFT(_revoNFT);
     }
+
+    /*
+    Set revo tier Address & contract
+    */
+    function setRevoTier(address _revoTier) public onlyOwner {
+        tierAddress = _revoTier;
+        revoTier = IRevoTierContract(tierAddress);
+    }
+
+    /*
+    Set revo egg farmer contract
+    */
+    function setRevoEggFarmer(address _revoEggFarmer) public onlyOwner {
+        revoEggFarmer = IRevoEggFarmer(_revoEggFarmer);
+    }
     
     function withdrawRevo(uint256 _amount) public onlyOwner {
         revoToken.transfer(owner(), _amount);
     }
-    
-    function editItemSelable(uint256 _index, string memory _name, string memory _description, uint256 _price, string memory _image, string memory _itemType, bool _enabled,
-    uint256 _count, uint256 _maxItems, uint8[3] memory _prices) public onlyOwner{
-        itemsSelable[_index].index = _index;
-        itemsSelable[_index].name = _name;
-        itemsSelable[_index].description = _description;
-        itemsSelable[_index].price = _price;
-        itemsSelable[_index].itemType = _itemType;
-        itemsSelable[_index].enabled = _enabled;
-        itemsSelable[_index].count = _count;
-        itemsSelable[_index].maxItems = _maxItems;
-        itemsSelable[_index].prices = _prices;
+
+    function setMinTierBooster(uint256 _minTierBooster) public onlyOwner {
+        minTierBooster = _minTierBooster;
     }
     
-    function editItemSelablePrices(uint256 _index, uint8[3] memory _prices) public onlyOwner{
-        itemsSelable[_index].prices = _prices;
+    function editItemsaleable(uint256 _index, string memory _name, string memory _description, uint256 _price, string memory _itemType, bool _enabled,
+    uint256 _count, uint256 _maxItems, uint256[3] memory _prices) public onlyOwner{
+        itemSaleable[_index].index = _index;
+        itemSaleable[_index].name = _name;
+        itemSaleable[_index].description = _description;
+        itemSaleable[_index].price = _prices[0];
+        itemSaleable[_index].itemType = _itemType;
+        itemSaleable[_index].enabled = _enabled;
+        editInventory(_index, _count, _maxItems);
+        editItemsaleablePrices(_index, _prices);
     }
     
-    function getAllItemsSelable() public view  returns(ITEMS_SELABLE[] memory){
+    function editItemsaleablePrices(uint256 _index, uint256[3] memory _prices) public onlyOwner{
+        itemSaleable[_index].prices = _prices;
+    }
+    
+    function editInventory(uint256 _index, uint256 _count, uint256 _maxItems) public onlyOwner{
+        itemSaleable[_index].count = _count;
+        itemSaleable[_index].maxItems = _maxItems;
+    }
+    
+    function getAllItemssaleable() public view  returns(ITEMS_SALEABLE[] memory){
         uint256 count;
-        for(uint i = 0; i < itemsSelable.length; i++){
-            if(itemsSelable[i].enabled){
+        for(uint i = 0; i < itemSaleable.length; i++){
+            if(itemSaleable[i].enabled){
                 count++;
             }
         }
         
-        ITEMS_SELABLE[] memory itemToReturn = new ITEMS_SELABLE[](count);
-        for(uint256 i = 0; i < itemsSelable.length; i++){
-            if(itemsSelable[i].enabled){
-                itemToReturn[i] = itemsSelable[i];
+        ITEMS_SALEABLE[] memory itemToReturn = new ITEMS_SALEABLE[](count);
+        for(uint256 i = 0; i < itemSaleable.length; i++){
+            if(itemSaleable[i].enabled){
+                itemToReturn[i] = itemSaleable[i];
                 itemToReturn[i].price = getItemPrice(i);
             }
         }
@@ -264,7 +366,7 @@ contract RevoNFTUtils is Ownable {
         pendingTx[lastPending] = data;
     }
 
-    function dequeuePendingTx() public returns (PENDING_TX memory data) {
+    function dequeuePendingTx() public onlyOwner returns (PENDING_TX memory data) {
         require(lastPending >= firstPending);  // non-empty queue
 
         data = pendingTx[firstPending];
@@ -277,8 +379,9 @@ contract RevoNFTUtils is Ownable {
         return firstPending <= lastPending ? (lastPending - firstPending) + 1 : 0;
     }
     
-    function getPendingTx() public view returns(PENDING_TX[] memory items){
+    function getPendingTx(uint256 _maxItems) public view returns(PENDING_TX[] memory items){
         uint256 count = countPendingTx();
+        count = count > _maxItems ? _maxItems : count;
         PENDING_TX[] memory itemToReturn = new PENDING_TX[](count);
         
         for(uint256 i = 0; i < count; i ++){
