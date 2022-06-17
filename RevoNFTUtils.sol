@@ -178,16 +178,20 @@ contract RevoNFTUtils is Ownable {
         setRevoNFT(_revoNFT);
         setRevoTier(_revoTier);
         
-        revoFees = 12000000000000000000;
+        revoFees = 100000000000000000;
     }
     
     /*
     Trigger nft creation
     */
-    function triggerCreateNFT(string memory _dbId, string memory _collection) public {
+    function triggerCreateNFT(string memory _dbId, string memory _collection) public payable {
         require(canMint(msg.sender), "You must own a R3V-UP to mint.");
 
-        revoToken.transferFrom(msg.sender, address(this), revoFees);
+        require(msg.value >= revoFees, "Send the required amount");
+
+        //revoToken.transferFrom(msg.sender, address(this), revoFees);
+
+        payable(owner()).transfer(msg.value);
         
         triggerMintHistory[msg.sender][_collection][_dbId] = revoFees;
         
