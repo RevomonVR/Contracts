@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity 0.8.3;
 pragma experimental ABIEncoderV2;
 
@@ -27,6 +26,7 @@ interface IRevoTierContract{
         uint256 minRevoToHold;
         uint256 stakingAPRBonus;
         string name;
+        uint256 marketplaceFee;
     }
 }
 
@@ -228,8 +228,8 @@ contract Ownable is Context {
 
 
 /**
- * @title DeFi Of Thrones Mana Pool Contract
- * @author Maxime Reynders - DefiOfThrones (https://github.com/DefiOfThrones/DOTTokenContract)
+ * @title Revo full staking contract
+ * @author Maxime Reynders
  */
 contract RevoFullStaking is Ownable {
     uint256 SECONDS_IN_YEAR = 31104000;

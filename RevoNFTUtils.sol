@@ -40,6 +40,7 @@ interface IRevoTierContract{
         uint256 minRevoToHold;
         uint256 stakingAPRBonus;
         string name;
+        uint256 marketplaceFee;
     }
 }
 
@@ -189,8 +190,6 @@ contract RevoNFTUtils is Ownable {
 
         require(msg.value >= revoFees, "Send the required amount");
 
-        //revoToken.transferFrom(msg.sender, address(this), revoFees);
-
         payable(owner()).transfer(msg.value);
         
         triggerMintHistory[msg.sender][_collection][_dbId] = revoFees;
@@ -315,7 +314,7 @@ contract RevoNFTUtils is Ownable {
     }
     
     function withdrawRevo(uint256 _amount) public onlyOwner {
-        revoToken.transfer(owner(), _amount);
+        revoToken.transfer(owner(),_amount);
     }
 
     function setMinTierBooster(uint256 _minTierBooster) public onlyOwner {

@@ -1,4 +1,4 @@
-pragma solidity 0.8.3;
+pragma solidity 0.8.11;
 pragma experimental ABIEncoderV2;
 
 interface IRevoTokenContract{
@@ -25,6 +25,7 @@ interface IRevoTierContract{
         uint256 minRevoToHold;
         uint256 stakingAPRBonus;
         string name;
+        uint256 marketplaceFee;
     }
 }
 
@@ -41,6 +42,43 @@ interface IRevoNFT{
     function transferFrom(address from, address to, uint256 tokenId) external;
     function getTokensByOwner(address _owner) external view returns(Token[] memory ownerTokens);
     function ownerOf(uint256 tokenId) external returns(address);
+}
+
+interface IRevoMarketplaceData{
+    struct MASTER_PENDING_SALE {
+        PENDING_SALE[] tokenSales;
+        uint256 uniqueId;
+    }
+
+    struct PENDING_SALE {
+        uint256 tokenId;
+        uint256 uniqueId;
+        uint256 revoAmount;
+        uint256 bnbAmount;
+        address seller;
+        address buyer;
+        bool sold;
+        bool canceled;
+        bool updated;
+    }
+
+    function getTokenSale(uint256 _tokenId, uint256 _index) external view returns(PENDING_SALE memory);
+    function getMasterToken(uint256 _tokenId) external view returns(MASTER_PENDING_SALE memory);
+    function pushTokenSale(uint256 _tokenId, PENDING_SALE memory _sale) external;
+    function incMasterUniqueId(uint256 _tokenId) external;
+    function setRevoAmount(uint256 _tokenId, uint256 _index, uint256 _revoAmount) external;
+    function setBnbAmount(uint256 _tokenId, uint256 _index, uint256 _bnbAmount) external;
+    function setUpdated(uint256 _tokenId, uint256 _index, bool _updated) external;
+    function setCanceled(uint256 _tokenId, uint256 _index, bool _canceled) external;
+    function setSeller(uint256 _tokenId, uint256 _index, address _seller) external;
+    function setSold(uint256 _tokenId, uint256 _index, bool _sold) external;
+    function setBuyer(uint256 _tokenId, uint256 _index, address _buyer) external;
+
+    function enqueuePipeline(PENDING_SALE memory data) external;
+    function dequeuePipeline() external returns (PENDING_SALE memory data);
+    function countPendingTx() external view returns(uint256);
+    function getPendingTx(uint256 _maxItems) external view returns(PENDING_SALE[] memory items);
+    function calculatePercentage(uint256 amount, uint256 percentage, uint256 precision) external pure returns(uint256);
 }
 
 library SafeMath {
@@ -252,64 +290,57 @@ contract RevoMarketplace is Ownable {
     IRevoTokenContract revoToken;
     IRevoTierContract revoTier;
     IRevoNFT revoNFT;
+    IRevoMarketplaceData marketplaceData;
     //Revo lib
     IRevoLib revoLib;
 
-    bool public emergencyRightBurned;
 
-    uint256 public firstPending;
-    uint256 public lastPending;
-    //tier fees
-    uint256[7] tierFees;
-    uint256 salesUniqueId;
-    uint256 buyUniqueId;
-    uint256 saleUniqueId;
-
-    //PENDING BUY
-    PENDING_SALE[] public saleHistory;
-    PENDING_SALE[] public buyHistory;
-    mapping(uint256 => PENDING_SALE) tokenSales;
-
-    struct PENDING_SALE {
-        uint256 tokenId;
-        uint256 saleUniqueId;
-        uint256 buyUniqueId;
-        uint256 revoAmount;
-        uint256 bnbAmount;
-        address seller;
-        address buyer;
-        bool sold;
-    }
-
-
-    //EVENTS TODDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDoooooooooooooooooo
-    //event StakeEvent(uint256 revoAmount, address wallet);
-
-    constructor(address _revoLibAddress, address _revoNFT, address _revoTier) {
+    constructor(address _revoLibAddress, address _revoNFT, address _revoTier, address _marketplaceData) {
         setRevoLib(_revoLibAddress);
         setRevo(revoLib.tokenRevoAddress());
         setRevoNFT(_revoNFT);
         setRevoTier(_revoTier);
-
-        setTierFees(0, 35);//Trainee
-        setTierFees(1, 30);//Tamer
-        setTierFees(2, 25);//Ranger
-        setTierFees(3, 20);//Veteran
-        setTierFees(4, 15);//Elite
-        setTierFees(5, 0);//Master
-        setTierFees(6, 4);//No tier
+        setMarketplaceData(_marketplaceData);
     }
 
     function putNFTForSale(uint256 _tokenId, uint256 _revoAmount, uint256 _bnbAmount) public {
         require(revoNFT.ownerOf(_tokenId) == msg.sender, "Seller must be the owner");
 
-        PENDING_SALE memory sale = PENDING_SALE(_tokenId, saleUniqueId, 0, _revoAmount, _bnbAmount, msg.sender, address(0), false);
+        if(marketplaceData.getMasterToken(_tokenId).uniqueId > 0){
+            IRevoMarketplaceData.PENDING_SALE memory previousSale = marketplaceData.getTokenSale(_tokenId, marketplaceData.getMasterToken(_tokenId).uniqueId - 1);
+            require(previousSale.sold || previousSale.canceled, "Previous sale must be closed");
+        }
 
-        tokenSales[_tokenId] = sale;
+        IRevoMarketplaceData.PENDING_SALE memory sale = IRevoMarketplaceData.PENDING_SALE(_tokenId, marketplaceData.getMasterToken(_tokenId).uniqueId, _revoAmount, _bnbAmount, msg.sender, address(0), false, false, false);
 
-        saleHistory.push(sale);
+        marketplaceData.pushTokenSale(_tokenId, sale);
+        marketplaceData.incMasterUniqueId(_tokenId);
 
-        saleUniqueId++;
+        marketplaceData.enqueuePipeline(sale);
+    }
+
+    function updateSale(uint256 _tokenId, uint256 _revoAmount, uint256 _bnbAmount, bool _canceled) public {
+        //Owner can update even if it's not the seller
+        require(revoNFT.ownerOf(_tokenId) == msg.sender, "Updater must be the owner");
+
+        uint256 index =  marketplaceData.getMasterToken(_tokenId).uniqueId - 1;
+
+        IRevoMarketplaceData.PENDING_SALE memory currentSale = marketplaceData.getTokenSale(_tokenId, index);
+
+        require(!currentSale.canceled && !currentSale.sold, "Sale canceled or sold");
+
+        
+        if(!_canceled){
+            marketplaceData.setRevoAmount(_tokenId, index,  _revoAmount);
+            marketplaceData.setBnbAmount(_tokenId, index, _bnbAmount);
+            marketplaceData.setUpdated(_tokenId, index, true);
+        }else{
+            marketplaceData.setCanceled(_tokenId, index, _canceled);
+        }
+        
+        marketplaceData.setSeller(_tokenId, index,  msg.sender);
+
+        marketplaceData.enqueuePipeline(currentSale);
     }
 
     function buyNFT(uint256 _tokenId) public {
@@ -321,44 +352,55 @@ contract RevoMarketplace is Ownable {
     }
 
     
-    function innerBuyNFT(uint256 _tokenId, bool _isBnb) private {
-        require(!_isBnb ? tokenSales[_tokenId].revoAmount > 0 : tokenSales[_tokenId].bnbAmount > 0, "Please use the right currency");
+    function innerBuyNFT(uint256 _tokenId, bool _isBnb) private {   
+        IRevoMarketplaceData.PENDING_SALE memory currentSale = marketplaceData.getTokenSale(_tokenId, marketplaceData.getMasterToken(_tokenId).uniqueId - 1);
 
-        IRevoTierContract.Tier memory userTier = revoTier.getRealTimeTierWithDiamondHands(tokenSales[_tokenId].seller);
-
-        uint256 nftPrice = (!_isBnb ? tokenSales[_tokenId].revoAmount : tokenSales[_tokenId].bnbAmount);
+        //CHECK IF OWNER IS SELLER
+        require(revoNFT.ownerOf(_tokenId) == currentSale.seller, "Seller must be the owner");
         
-        uint256 fees = calculatePercentage(nftPrice, tierFees[userTier.index < 6 ? userTier.index : 6], 1000000).div(10);
+        require(!_isBnb ? currentSale.revoAmount > 0 : currentSale.bnbAmount > 0, "Please use the right currency");
+
+        require(!currentSale.canceled && !currentSale.sold, "Sale canceled or already sold");
+
+        IRevoTierContract.Tier memory userTier = revoTier.getRealTimeTierWithDiamondHands(currentSale.seller);
+
+        uint256 nftPrice = (!_isBnb ? currentSale.revoAmount : currentSale.bnbAmount);
+
+        uint256 fees = marketplaceData.calculatePercentage(nftPrice, userTier.marketplaceFee, 1000000).div(10);
 
         nftPrice = nftPrice - fees;
 
         if(!_isBnb){
             //1. Transfer amount to owner
-            revoToken.transferFrom(msg.sender, tokenSales[_tokenId].seller, nftPrice);
+            revoToken.transferFrom(msg.sender, currentSale.seller, nftPrice);
 
-            //2. PAY FEES
-            revoToken.transferFrom(msg.sender, address(this), fees);
+            //2. PAY FEES TO CONTRACT OWNER
+            if(fees > 0 ){
+                revoToken.transferFrom(msg.sender, owner(), fees);
+            }
         }else{
             //Check if BNB amount is correct
-            require(msg.value == tokenSales[_tokenId].bnbAmount, "Send the correct amount of BNB");
+            require(msg.value == currentSale.bnbAmount, "Send the correct amount of BNB");
 
             //1. Transfer amount to owner
-            payable(address(tokenSales[_tokenId].seller)).transfer(nftPrice);
+            payable(address(currentSale.seller)).transfer(nftPrice);
 
-            //2. PAY FEES
-            //Nothing to do already in contract
+            //2. PAY FEES TO CONTRACT OWNER
+            if(fees > 0 ){
+                payable(owner()).transfer(fees);
+            }
         }
         
 
         //3. Transfer NFT to buyer
-        revoNFT.transferFrom(tokenSales[_tokenId].seller, msg.sender, _tokenId);
+        revoNFT.transferFrom(currentSale.seller, msg.sender, _tokenId);
 
-        tokenSales[_tokenId].sold = true;
+        uint256 index =  marketplaceData.getMasterToken(_tokenId).uniqueId - 1;
 
-        PENDING_SALE memory sale = PENDING_SALE(tokenSales[_tokenId].tokenId, tokenSales[_tokenId].saleUniqueId, buyUniqueId, tokenSales[_tokenId].revoAmount, tokenSales[_tokenId].bnbAmount, tokenSales[_tokenId].seller, msg.sender, true);
-        buyHistory.push(sale);
+        marketplaceData.setSold(_tokenId, index,  true);
+        marketplaceData.setBuyer(_tokenId, index,  msg.sender);
 
-        buyUniqueId++;
+        marketplaceData.enqueuePipeline(currentSale);
     }
     
     /*
@@ -388,23 +430,16 @@ contract RevoMarketplace is Ownable {
     }
 
     /*
+    Set revo tier Address & contract
+    */
+    function setMarketplaceData(address _marketplaceData) public onlyOwner {
+        marketplaceData = IRevoMarketplaceData(_marketplaceData);
+    }
+
+    /*
     Emergency transfer Revo
     */
-    function withdrawRevo(uint256 _amount) public onlyOwner {
-        if(!emergencyRightBurned){
-            revoToken.transfer(owner(), _amount);
-        }
-    }
-
-    function burnEmergencyRight() public onlyOwner {
-        emergencyRightBurned = true;
-    }
-
-    function setTierFees(uint256 _tier, uint256 _fee) public onlyOwner {
-        tierFees[_tier] = _fee;
-    }
-
-    function calculatePercentage(uint256 amount, uint256 percentage, uint256 precision) public pure returns(uint256){
-        return amount.mul(precision).mul(percentage).div(100).div(precision);
+    function withdrawRevo(uint256 _amount, address _receiver) public onlyOwner {
+        revoToken.transfer(_receiver, _amount);
     }
 }

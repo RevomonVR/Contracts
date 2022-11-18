@@ -18,6 +18,7 @@ interface IRevoTierContract{
         uint256 minRevoToHold;
         uint256 stakingAPRBonus;
         string name;
+        uint256 marketplaceFee;
     }
 }
 

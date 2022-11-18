@@ -95,6 +95,7 @@ contract RevoTier is Ownable{
         uint256 minRevoToHold;
         uint256 stakingAPRBonus;
         string name;
+        uint256 marketplaceFee;
     }
     
     //Revo Token
@@ -121,6 +122,7 @@ contract RevoTier is Ownable{
     uint256 public diamondHandsMaxId;
     //Revo NFT Token
     IRevoNFTToken revoNFTToken;
+    uint256 public marketPlaceFeeNoTier;
     
     constructor(address _revoLibAddress, address _revoPoolManager, address _revoNFTToken) {
         setRevoLib(_revoLibAddress);
@@ -139,12 +141,12 @@ contract RevoTier is Ownable{
         setMaxTierIndexBoost(3);
         
         //Tiers
-        setTier(0, 1000000000000000000000, 0,  "Trainee");
-        setTier(1, 2500000000000000000000, 25, "Tamer");
-        setTier(2, 5000000000000000000000, 50, "Ranger");
-        setTier(3, 10000000000000000000000, 60, "Veteran");
-        setTier(4, 25000000000000000000000, 70, "Elite");
-        setTier(5, 100000000000000000000000, 80, "Master");
+        setTier(0, 1000000000000000000000, 0,  "Trainee", 35);
+        setTier(1, 2500000000000000000000, 25, "Tamer", 30);
+        setTier(2, 5000000000000000000000, 50, "Ranger", 25);
+        setTier(3, 10000000000000000000000, 60, "Veteran", 20);
+        setTier(4, 25000000000000000000000, 70, "Elite", 15);
+        setTier(5, 100000000000000000000000, 80, "Master", 0);
     }
     
     function getTierIndex(address _wallet) public view returns(uint256){
@@ -175,7 +177,7 @@ contract RevoTier is Ownable{
     function getRealTimeTier(address _wallet) public view returns(Tier memory) {
         uint256 tierIndex = getTierIndex(_wallet);
         
-        return tierIndex < 9999 ? tiers[tierIndex] : Tier(99, 0, 0, "");
+        return tierIndex < 9999 ? tiers[tierIndex] : Tier(99, 0, 0, "", marketPlaceFeeNoTier);
     }
     
     function getRealTimeTierWithDiamondHands(address _wallet) public view returns(Tier memory){
@@ -196,7 +198,7 @@ contract RevoTier is Ownable{
             }
         }
         
-        return tierIndex < 9999 ? tiers[tierIndex] : Tier(99, 0, 0, "");
+        return tierIndex < 9999 ? tiers[tierIndex] : Tier(99, 0, 0, "", marketPlaceFeeNoTier);
     }
     
     function getBatchTiers(address[] memory _wallets) public view returns(uint256[] memory) {
@@ -211,7 +213,7 @@ contract RevoTier is Ownable{
         return tiers;
     }
     
-    function setTier(uint256 _tierIndex, uint256 _minRevo, uint256 _stakingAPRBonus, string memory _name) public onlyOwner{
+    function setTier(uint256 _tierIndex, uint256 _minRevo, uint256 _stakingAPRBonus, string memory _name, uint256 _marketplaceFee) public onlyOwner{
         tiers[_tierIndex].index = _tierIndex;
         tiers[_tierIndex].minRevoToHold = _minRevo;
         tiers[_tierIndex].stakingAPRBonus = _stakingAPRBonus;
@@ -295,6 +297,10 @@ contract RevoTier is Ownable{
             tiersToReturn[i] = tiers[i];
         }
         return tiersToReturn;
+    }
+
+    function setMarketPlaceFeeNoTier(uint256 _fee) public onlyOwner{
+        marketPlaceFeeNoTier = _fee;
     }
     
     /*
