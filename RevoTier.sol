@@ -23,6 +23,9 @@ interface IRevoPoolManagerContract{
 
 interface IRevoNFTToken{
     function getTokensDbIdByOwnerAndCollection(address _owner, string memory _collection) external view returns(string[] memory ownerTokensDbId);
+    function tokenInfo(uint256) external view returns(string memory collection, string memory dbId, uint256 tokenId);
+    function balanceOf(address owner) external view returns (uint256 balance);
+    function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256 tokenId);
 }
 
 library SafeMath {
@@ -185,14 +188,21 @@ contract RevoTier is Ownable{
         uint256 tierIndex = getTierIndex(_wallet);
         
         if(nftBoostEnabled && (tierIndex <= maxTierIndexBoost || tierIndex == 9999)){
-            string[] memory tokens = revoNFTToken.getTokensDbIdByOwnerAndCollection(_wallet, "COSMETIC");
+
             bool found = false;
-            for(uint i = 0; i < tokens.length; i++){
-                uint dbId = stringToUint(tokens[i]);
-                if(dbId >= diamondHandsMinId && dbId <= diamondHandsMaxId){
-                    found = true;
+            uint256 tokenCount = revoNFTToken.balanceOf(_wallet);
+
+            if (tokenCount > 0) {
+                for (uint256 index = 0; index < tokenCount; index++) {
+                    (, string memory dbId , ) = revoNFTToken.tokenInfo(revoNFTToken.tokenOfOwnerByIndex(_wallet, index));
+                    uint256 dbIdInt = stringToUint(dbId);
+                    if(dbIdInt >= diamondHandsMinId && dbIdInt <= diamondHandsMaxId){
+                        found = true;
+                        index = tokenCount;
+                    }
                 }
             }
+
             if(found){
                 tierIndex = tierIndex < 9999 ? tierIndex.add(1) : 0;
             }
@@ -218,6 +228,7 @@ contract RevoTier is Ownable{
         tiers[_tierIndex].minRevoToHold = _minRevo;
         tiers[_tierIndex].stakingAPRBonus = _stakingAPRBonus;
         tiers[_tierIndex].name = _name;
+        tiers[_tierIndex].marketplaceFee = _marketplaceFee;
     }
     
     /*
