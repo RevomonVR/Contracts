@@ -29,6 +29,9 @@ interface IRevoNFT{
     function burn(uint256 tokenId) external;
     function transferFrom(address from, address to, uint256 tokenId) external;
     function getTokensByOwner(address _owner) external view returns(Token[] memory ownerTokens);
+    function balanceOf(address owner) external view returns (uint256 balance);
+    function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256 tokenId);
+    function tokenInfo(uint256) external view returns(string memory collection, string memory dbId, uint256 tokenId);
 }
 
 interface IRevoTierContract{
@@ -270,8 +273,25 @@ contract RevoNFTUtils is Ownable {
         return price;
     }
 
-    function canMint(address user) public view returns(bool){
-        return revoNFT.getTokensDbIdByOwnerAndCollection(user, "R3VUP").length > 0;
+    function canMint(address _user) public view returns(bool){
+        uint256 tokenCount = revoNFT.balanceOf(_user);
+
+        if (tokenCount == 0) {
+            // Return an empty array
+            return false;
+        } else {
+            bool find = false;
+            for (uint256 index = 0; index < tokenCount; index++) {
+                
+                (string memory collection , , ) = revoNFT.tokenInfo(revoNFT.tokenOfOwnerByIndex(_user, index));
+                if(compareStrings(collection, "R3VUP")){
+                    find = true;
+                    index = tokenCount;
+                }
+            }
+
+            return find;
+        }
     }
     
     function setRevoFees(uint256 _fees) public onlyOwner {
