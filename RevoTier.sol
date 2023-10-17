@@ -28,6 +28,11 @@ interface IRevoNFTToken{
     function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256 tokenId);
 }
 
+interface IRevoNFTStaking{
+    function isDiamondHandsStaked(address _owner) external view returns(bool);
+    function isRevupStaked(address _owner) external view returns(bool);
+}
+
 library SafeMath {
     function add(uint x, uint y) internal pure returns (uint z) {
         require((z = x + y) >= x, 'ds-math-add-overflow');
@@ -110,6 +115,8 @@ contract RevoTier is Ownable{
     //Revo PoolManager 
     address public revoPoolManagerAddress;
     IRevoPoolManagerContract revoPoolManager;
+    //REVO NFT STAKING
+    IRevoNFTStaking revoNFTStaking;
     //Tiers
     Tier[6] public tiers;
     
@@ -120,26 +127,22 @@ contract RevoTier is Ownable{
     bool public nftBoostEnabled;
     //Max Tier boost 
     uint256 public maxTierIndexBoost;
-    //Diamond hand nft id
-    uint256 public diamondHandsMinId;
-    uint256 public diamondHandsMaxId;
     //Revo NFT Token
     IRevoNFTToken revoNFTToken;
     uint256 public marketPlaceFeeNoTier;
     
-    constructor(address _revoLibAddress, address _revoPoolManager, address _revoNFTToken) {
+    constructor(address _revoLibAddress, address _revoPoolManager, address _revoNFTToken, address _revoNFTStaking) {
         setRevoLib(_revoLibAddress);
         setRevoToken(revoLib.tokenRevoAddress());
         setRevoPoolManager(_revoPoolManager);
         setRevoNFTToken(_revoNFTToken);
+        setRevoNFTStaking(_revoNFTStaking);
         //Enable liquidity balance
         setLiquidityBalanceEnable(true);
         //Enable staking balance
         setStakingBalanceEnable(true);
         //Enable NFT Tier boost 
         setNftBoostEnable(true);
-        //Set Diamond hands Ids 
-        setDiamondHandsId(296, 2586);
         //Set Max tier index boost to 3 included
         setMaxTierIndexBoost(3);
         
@@ -189,19 +192,7 @@ contract RevoTier is Ownable{
         
         if(nftBoostEnabled && (tierIndex <= maxTierIndexBoost || tierIndex == 9999)){
 
-            bool found = false;
-            uint256 tokenCount = revoNFTToken.balanceOf(_wallet);
-
-            if (tokenCount > 0) {
-                for (uint256 index = 0; index < tokenCount; index++) {
-                    (, string memory dbId , ) = revoNFTToken.tokenInfo(revoNFTToken.tokenOfOwnerByIndex(_wallet, index));
-                    uint256 dbIdInt = stringToUint(dbId);
-                    if(dbIdInt >= diamondHandsMinId && dbIdInt <= diamondHandsMaxId){
-                        found = true;
-                        index = tokenCount;
-                    }
-                }
-            }
+            bool found = revoNFTStaking.isDiamondHandsStaked(_wallet);
 
             if(found){
                 tierIndex = tierIndex < 9999 ? tierIndex.add(1) : 0;
@@ -289,13 +280,12 @@ contract RevoTier is Ownable{
     function setMaxTierIndexBoost(uint256 _index) public onlyOwner{
         maxTierIndexBoost = _index;
     }
-    
+
     /*
-    Set diamond hand min max id
+    Set revo tier Address & contract
     */
-    function setDiamondHandsId(uint256 _min, uint256 _max) public onlyOwner{
-        diamondHandsMinId = _min;
-        diamondHandsMaxId = _max;
+    function setRevoNFTStaking(address _revoNFTStaking) public onlyOwner {
+        revoNFTStaking = IRevoNFTStaking(_revoNFTStaking);
     }
     
     function getTier(uint256 _index) public view returns(Tier memory){

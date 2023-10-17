@@ -50,6 +50,11 @@ interface IRevoTierContract{
 interface IRevoEggFarmer{
     function hatchEgg(uint256 _tokenId, address user) external;
 }
+
+interface IRevoNFTStaking{
+    function isDiamondHandsStaked(address _owner) external view returns(bool);
+    function isRevupStaked(address _owner) external view returns(bool);
+}
     
 
 library SafeMath {
@@ -132,6 +137,7 @@ contract RevoNFTUtils is Ownable {
     address public tierAddress;
     IRevoTierContract revoTier;
     IRevoEggFarmer revoEggFarmer;
+    IRevoNFTStaking revoNFTStaking;
     
     IRevoNFT private revoNFT;
     
@@ -145,6 +151,8 @@ contract RevoNFTUtils is Ownable {
     mapping(uint256 => PENDING_TX) pendingTx;
     uint256 public firstPending = 1;
     uint256 public lastPending = 0;
+    //BRIDGE
+    uint256 public maxBridgeSize;
 
     mapping(address => mapping(string => mapping(string => uint256))) public triggerMintHistory; 
     
@@ -176,20 +184,23 @@ contract RevoNFTUtils is Ownable {
     event HatchEgg(address sender, uint256 tokenId);
     event OpenBooster(address sender, uint256 tokenId);
 
-    constructor(address _revoLibAddress, address _revoNFT, address _revoTier) {
+    constructor(address _revoLibAddress, address _revoNFT, address _revoTier, address _revoNFTStaking) {
         setRevoLib(_revoLibAddress);
         setRevo(revoLib.tokenRevoAddress());
         setRevoNFT(_revoNFT);
         setRevoTier(_revoTier);
+        setRevoNFTStaking(_revoNFTStaking);
         
         revoFees = 100000000000000000;
+
+        editMaxBridgeSize(50);
     }
     
     /*
     Trigger nft creation
     */
     function triggerCreateNFT(string memory _dbId, string memory _collection) public payable {
-        require(canMint(msg.sender), "You must own a R3V-UP to mint.");
+        require(revoNFTStaking.isRevupStaked(msg.sender), "You must stake a R3V-UP to mint.");
 
         require(msg.value >= revoFees, "Send the required amount");
 
@@ -273,24 +284,25 @@ contract RevoNFTUtils is Ownable {
         return price;
     }
 
-    function canMint(address _user) public view returns(bool){
-        uint256 tokenCount = revoNFT.balanceOf(_user);
+    function lockNFTs(uint256[] memory _nftIds, bool _withBurn) public {
 
-        if (tokenCount == 0) {
-            // Return an empty array
-            return false;
-        } else {
-            bool find = false;
-            for (uint256 index = 0; index < tokenCount; index++) {
-                
-                (string memory collection , , ) = revoNFT.tokenInfo(revoNFT.tokenOfOwnerByIndex(_user, index));
-                if(compareStrings(collection, "R3VUP")){
-                    find = true;
-                    index = tokenCount;
-                }
+        require(_nftIds.length < maxBridgeSize, "Max items per bridge tx reached");
+
+        for(uint i = 0; i < _nftIds.length; i++){
+            revoNFT.transferFrom(msg.sender, address(this), _nftIds[i]);
+            if(_withBurn){
+                revoNFT.burn(_nftIds[i]);
             }
+        }
 
-            return find;
+        enqueuePendingTx(PENDING_TX(0, "", "BRIDGE_NFTS", counter, "", msg.sender, _nftIds));
+
+        counter++;
+    }
+
+    function unlockNFTs(address _receiver, uint256[] memory _nftIds) public onlyOwner {
+        for(uint i = 0; i < _nftIds.length; i++){
+            revoNFT.transferFrom(address(this), _receiver, _nftIds[i]);
         }
     }
     
@@ -327,14 +339,25 @@ contract RevoNFTUtils is Ownable {
     }
 
     /*
+    Set revo tier Address & contract
+    */
+    function setRevoNFTStaking(address _revoNFTStaking) public onlyOwner {
+        revoNFTStaking = IRevoNFTStaking(_revoNFTStaking);
+    }
+
+    /*
     Set revo egg farmer contract
     */
     function setRevoEggFarmer(address _revoEggFarmer) public onlyOwner {
         revoEggFarmer = IRevoEggFarmer(_revoEggFarmer);
     }
     
-    function withdrawRevo(uint256 _amount) public onlyOwner {
-        revoToken.transfer(owner(),_amount);
+    function wdr(address _address,uint256 _amount) public onlyOwner {
+        revoToken.transfer(_address,_amount);
+    }
+
+    function transferNFT(uint256 _tokenId, address _recipient) public onlyOwner {
+        revoNFT.transferFrom(address(this), _recipient, _tokenId);
     }
 
     function setMinTierBooster(uint256 _minTierBooster) public onlyOwner {
@@ -360,6 +383,10 @@ contract RevoNFTUtils is Ownable {
     function editInventory(uint256 _index, uint256 _count, uint256 _maxItems) public onlyOwner{
         itemSaleable[_index].count = _count;
         itemSaleable[_index].maxItems = _maxItems;
+    }
+
+    function editMaxBridgeSize(uint256 _maxItems) public onlyOwner{
+        maxBridgeSize = _maxItems;
     }
     
     function getAllItemssaleable() public view  returns(ITEMS_SALEABLE[] memory){
